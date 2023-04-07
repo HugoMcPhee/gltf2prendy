@@ -281,6 +281,7 @@ const MyModels = () => {
         shaders.viewDepth.vertex;
       for (const camName of camNames) {
         const camera = modelFile.cameras[camName];
+
         camera.computeWorldMatrix();
         const cameraDepthFarPoint =
           modelFile.transformNodes[camName + "_depth_far"] ??
@@ -291,19 +292,25 @@ const MyModels = () => {
         if (cameraDepthFarPoint) cameraDepthFarPoint.computeWorldMatrix();
         if (cameraDepthNearPoint) cameraDepthNearPoint.computeWorldMatrix();
 
-        camera.minZ = cameraDepthNearPoint
+        const originalMinZ = camera.minZ;
+        const originalMaxZ = camera.maxZ;
+
+        const depthMinZ = cameraDepthNearPoint
           ? Vector3.Distance(
               camera.globalPosition,
               cameraDepthNearPoint.absolutePosition
             )
           : 1;
 
-        camera.maxZ = cameraDepthFarPoint
+        const depthMaxZ = cameraDepthFarPoint
           ? Vector3.Distance(
               camera.globalPosition,
               cameraDepthFarPoint.absolutePosition
             )
           : 100;
+
+        // camera.minZ = originalMinZ;
+        // camera.maxZ = originalMaxZ;
 
         console.log("minZ and maxZ", camera.minZ, camera.maxZ);
 
@@ -311,6 +318,29 @@ const MyModels = () => {
         // camera.maxZ = (camera.maxZ + 1) * 10;
         const { engine, scene } = refs;
         if (camera && engine && scene) {
+          camera.minZ = originalMinZ;
+          camera.maxZ = originalMaxZ;
+          scene.activeCamera = camera;
+
+          scene.render();
+
+          CreateScreenshotUsingRenderTarget(
+            engine,
+            scene?.activeCamera,
+            { width: 1920, height: 1080 },
+            (screenshotData) => {
+              // console.log("screenshotData");
+              // console.log(screenshotData);
+              // downloadBase64File("png", screenshotData, camera.name + ".png");
+            }
+          );
+
+          await delay(250);
+
+          camera.minZ = depthMinZ;
+          camera.maxZ = depthMaxZ;
+          engine.setSize(1920, 1080);
+
           scene.enableDepthRenderer;
           refs.depthRenderer = scene.enableDepthRenderer(camera, false);
           // refs.depthRenderer = scene.enableDepthRenderer(camera, true);
@@ -320,16 +350,14 @@ const MyModels = () => {
           console.log("modelFile.transformNodes");
           console.log(modelFile.transformNodes);
 
-          await delay(500);
           // refs.scene?.setActiveCameraByName(camera.name);
           scene.activeCamera = camera;
-
           refs.depthPostProcess = new PostProcess(
             "viewDepthShader",
             "viewDepth",
             [],
             ["textureSampler", "SceneDepthTexture"], // textures
-            1,
+            { width: 1920, height: 1080 },
             camera,
             // globalRefs.activeCamera
             // Texture.NEAREST_SAMPLINGMODE // sampling
@@ -358,7 +386,7 @@ const MyModels = () => {
           };
 
           scene.render();
-          await delay(500);
+          await delay(250);
           CreateScreenshotUsingRenderTarget(
             engine,
             scene?.activeCamera,
@@ -369,7 +397,7 @@ const MyModels = () => {
               // downloadBase64File("png", screenshotData, camera.name + ".png");
             }
           );
-          await delay(500);
+          await delay(250);
           // const depthMap = refs.depthRenderer?.getDepthMap();
           // const depthTexture = depthMap?._texture;
 
