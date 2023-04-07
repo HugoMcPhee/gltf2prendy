@@ -418,10 +418,23 @@ ansi-styles@^3.2.1:
   dependencies:
     color-convert "^1.9.0"
 
-babylonjs@^5.43.2:
-  version "5.43.2"
-  resolved "https://registry.yarnpkg.com/babylonjs/-/babylonjs-5.43.2.tgz#d30bb173dc8a056344f0a8b216336733d6b09ad0"
-  integrity sha512-i97UDBDSpbAd+oTG5XiLBA10f61WzjYI1kvSRJ35Er4O6fML5lqcxyjUbFtoDtLmSutkRLW1uh7rqmm3CKzYUA==
+babylonjs-gltf2interface@^5.54.0:
+  version "5.54.0"
+  resolved "https://registry.yarnpkg.com/babylonjs-gltf2interface/-/babylonjs-gltf2interface-5.54.0.tgz#8706ebca117a6dbb8783745691375f4c8e1e125d"
+  integrity sha512-GOG4PFIk8olsN0UVqj9izhxILHNQL0dSl8rrKJtQ/3OAAjTtgn6CIWF6iqmdTmQ9tY/FopCPDNGTsB2XZJ2vwQ==
+
+babylonjs-serializers@^5.54.0:
+  version "5.54.0"
+  resolved "https://registry.yarnpkg.com/babylonjs-serializers/-/babylonjs-serializers-5.54.0.tgz#68a99d7527c2864642593968e1654acb6fe5a6a0"
+  integrity sha512-ReT0FoWBkHOM9UKTCOmwvPhyjVi3R1Q51XChvmb3XciKrDXrG/xRqB2Pc24RStMtNe7ErmY3CJUWoN/sZ849hQ==
+  dependencies:
+    babylonjs "^5.54.0"
+    babylonjs-gltf2interface "^5.54.0"
+
+babylonjs@^5.54.0:
+  version "5.54.0"
+  resolved "https://registry.yarnpkg.com/babylonjs/-/babylonjs-5.54.0.tgz#d76d882b02c92885eab4957b3104242fbfe05ab2"
+  integrity sha512-IuW1VSssFyPC0qFRhBun/qBZSwNMGMGQJNkrppsTKALAHGQdcF9Ggj8w9Dk08Jix9IJdwNiVtFuBNLBctz/fAQ==
 
 browserslist@^4.21.3:
   version "4.21.4"

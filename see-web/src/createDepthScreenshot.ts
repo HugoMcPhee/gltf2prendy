@@ -11,7 +11,7 @@ import {
   ShaderStore,
   Texture,
 } from "@babylonjs/core";
-import { shaders } from "./shaders";
+import { shaders } from "./helpers/shaders";
 
 export function createDepthScreenshot(
   depthRenderTarget: RenderTargetTexture,

@@ -3,185 +3,29 @@
 // NOTE may need to load this with a live import/ require
 // OR need to load it as a blob/file in nodejs eventually
 import stairyDetailModelFile from "./assets/places/stairy/stairy_detail.glb";
-import basementDetailModelFile from "./assets/places/basement/basement_detail.glb";
 
 import {
-  CreateScreenshotUsingRenderTarget,
-  Scene as BabylonScene,
   Engine as BabylonEngine,
-  Camera as BabylonCamera,
-  DepthRenderer,
-  RenderTargetTexture,
-  DumpTools,
-  IScreenshotSize,
-  Texture,
-  PostProcess,
-  ShaderStore,
+  Scene as BabylonScene,
 } from "@babylonjs/core";
 
 // import "@babylonjs/inspector";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
-import { MeshAssetTask } from "@babylonjs/core/Misc/assetsManager";
-import React, { Suspense, useContext, useEffect, useMemo, useRef } from "react";
+import { Suspense, useContext, useEffect, useRef } from "react";
 import {
   AssetManagerContext,
-  AssetManagerContextProvider,
   Engine,
   Scene,
-  Task,
-  TaskType,
-  useAssetManager,
   useBeforeRender,
 } from "react-babylonjs";
-import { useModelFile } from "./useModelFile";
-import delay from "delay";
-import { Constants } from "babylonjs";
-import { shaders } from "./shaders";
+import { loadModelFile } from "./helpers/loadModelFile";
+import renderPics from "./helpers/renderPics";
 
 const refs = {
   scene: null as BabylonScene | null,
   engine: null as BabylonEngine | null,
-  modelFile: null as null | ReturnType<typeof useModelFile>,
-  depthRenderer: null as null | DepthRenderer,
-  depthPostProcess: null as null | PostProcess,
 };
-
-function splitFilePath(fullPath: string) {
-  const lastSeparatorIndex = fullPath.lastIndexOf("/");
-  const directoryPath = fullPath.slice(0, lastSeparatorIndex) + "/"; // returns '/path/to'
-  const filename = fullPath.slice(lastSeparatorIndex + 1); // returns 'file.txt'
-
-  const lastDotIndex = filename.lastIndexOf(".");
-  const filenameWithoutExtension = filename.slice(
-    lastSeparatorIndex + 1,
-    lastDotIndex
-  ); // returns 'file'
-  const fileExtension = fullPath.slice(lastDotIndex + 1); // returns 'txt'
-
-  return {
-    filename,
-    directoryPath,
-    name: filenameWithoutExtension,
-    extension: fileExtension,
-  };
-}
-
-function renderTextureToFile(
-  engine: BabylonEngine,
-  scene: BabylonScene,
-  texturesss: RenderTargetTexture,
-  camera: BabylonCamera,
-  size: { width: number; height: number },
-  successCallback?: (data: string) => void,
-  mimeType: string = "image/png",
-  // samples: number = 1,
-  // antialiasing: boolean = false,
-  fileName?: string
-  // renderSprites: boolean = false,
-  // enableStencilBuffer: boolean = false,
-  // useLayerMask: boolean = true
-) {
-  const { height, width } = size;
-  const targetTextureSize = { width, height };
-
-  // const texture = new RenderTargetTexture(scene,d,d, d,,d,d,,)
-
-  const originalSize = {
-    width: engine.getRenderWidth(),
-    height: engine.getRenderHeight(),
-  };
-  engine.setSize(width, height); // we need this call to trigger onResizeObservable with the screenshot width/height on all the subsystems that are observing this event and that needs to (re)create some resources with the right dimensions
-
-  // const scene = camera.getScene();
-  const texture = new RenderTargetTexture(
-    "screenShot",
-    targetTextureSize,
-    scene,
-    false,
-    false,
-    Constants.TEXTURETYPE_UNSIGNED_INT,
-    false,
-    Texture.NEAREST_SAMPLINGMODE,
-    undefined,
-    false, //enableStencilBuffer,
-    undefined,
-    undefined,
-    undefined
-    // samples
-  );
-  texture.renderList = scene.meshes.slice();
-  // texture.samples = samples;
-  // texture.renderSprites = renderSprites;
-  texture.activeCamera = camera;
-  // texture.forceLayerMaskCheck = useLayerMask;
-
-  texture.renderList = scene.meshes.slice();
-  // texture.samples = samples;
-  // texture.renderSprites = renderSprites;
-  texture.activeCamera = camera;
-  // texture.forceLayerMaskCheck = useLayerMask;
-  // texture.textureType = Constants.TEXTURETYPE_UNSIGNED_INT;
-  texture.updateSamplingMode(Texture.NEAREST_SAMPLINGMODE);
-
-  const renderToTexture = () => {
-    engine.onEndFrameObservable.addOnce(() => {
-      texture
-        .readPixels(undefined, undefined, undefined, false)!
-        .then((data) => {
-          DumpTools.DumpData(
-            width,
-            height,
-            data,
-            successCallback as (data: string | ArrayBuffer) => void,
-            mimeType,
-            fileName,
-            true
-          );
-          // texture.dispose();
-        });
-    });
-
-    // render the RTT
-    scene.incrementRenderId();
-    scene.resetCachedMaterial();
-    texture.render(true);
-
-    // re-render the scene after the camera has been reset to the original camera to avoid a flicker that could occur
-    // if the camera used for the RTT rendering stays in effect for the next frame (and if that camera was different from the original camera)
-    scene.incrementRenderId();
-    scene.resetCachedMaterial();
-    engine.setSize(originalSize.width, originalSize.height);
-    camera.getProjectionMatrix(true); // Force cache refresh;
-    scene.render();
-  };
-  renderToTexture();
-}
-
-const baseUrl =
-  "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/";
-
-console.log("--------------------");
-console.log("stairyDetailModelFile");
-console.log(stairyDetailModelFile);
-
-const stairyModelFilePaths = splitFilePath(stairyDetailModelFile);
-const basementModelFilePaths = splitFilePath(basementDetailModelFile);
-
-const modelAssetTasks: Task[] = [
-  {
-    taskType: TaskType.Mesh,
-    rootUrl: stairyModelFilePaths.directoryPath,
-    sceneFilename: stairyModelFilePaths.filename,
-    name: stairyModelFilePaths.name,
-  },
-  // {
-  //   taskType: TaskType.Mesh,
-  //   rootUrl: basementModelFilePaths.directoryPath,
-  //   sceneFilename: basementModelFilePaths.filename,
-  //   name: basementModelFilePaths.name,
-  // },
-];
 
 const MyFallback = () => {
   const boxRef = useRef<Mesh | null>(null);
@@ -235,195 +79,25 @@ const MyFallback = () => {
 const MyModels = () => {
   // const assetManagerResult = useAssetManager(modelAssetTasks);
 
-  const modelFile = useModelFile(stairyDetailModelFile, refs.scene);
-
-  refs.modelFile = modelFile;
+  // const modelFile = useModelFile(stairyDetailModelFile, refs.scene);
 
   useEffect(() => {
-    console.log("modelFile");
-    console.log(modelFile);
+    async function asyncEffect() {
+      const modelFile = await loadModelFile({
+        modelPath: stairyDetailModelFile,
+        scene: refs.scene,
+      });
+      console.log("modelFile");
+      console.log(modelFile);
 
-    function downloadBase64File(
-      contentType: string,
-      base64Data: string,
-      fileName: string
-    ) {
-      const linkSource = `${base64Data}`;
-      const downloadLink = document.createElement("a");
-      downloadLink.href = linkSource;
-      downloadLink.download = fileName;
-      downloadLink.click();
-    }
-    if (refs.scene) {
-      // refs.depthRenderer = refs.scene.enableDepthRenderer(null, false, true);
-      // refs.depthRenderer = refs.scene.enableDepthRenderer();
-      // refs.depthRenderer = new DepthRenderer(
-      //   refs.scene,
-      //   Constants.TEXTURETYPE_UNSIGNED_INT,
-      //   null,
-      //   undefined,
-      //   Texture.NEAREST_SAMPLINGMODE
-      // );
+      console.log("modelFile.transformNodes");
+      console.log(modelFile.transformNodes);
+
+      renderPics({ engine: refs.engine, scene: refs.scene, modelFile });
     }
 
-    async function setDifferentCameras() {
-      modelFile.transformNodes.walls?.setEnabled(false);
-      modelFile.transformNodes.triggers?.setEnabled(false);
-      modelFile.transformNodes.floors?.setEnabled(false);
-
-      const camNames = Object.keys(modelFile.cameras);
-      for (const camName of camNames) {
-        modelFile.transformNodes?.[camName]?.setEnabled(false);
-      }
-      ShaderStore.ShadersStore["viewDepthPixelShader"] =
-        shaders.viewDepth.fragment;
-      ShaderStore.ShadersStore["viewDepthVertexShader"] =
-        shaders.viewDepth.vertex;
-      for (const camName of camNames) {
-        const camera = modelFile.cameras[camName];
-
-        camera.computeWorldMatrix();
-        const cameraDepthFarPoint =
-          modelFile.transformNodes[camName + "_depth_far"] ??
-          modelFile.transformNodes[camName + "_depth"];
-        const cameraDepthNearPoint =
-          modelFile.transformNodes[camName + "_depth_near"];
-
-        if (cameraDepthFarPoint) cameraDepthFarPoint.computeWorldMatrix();
-        if (cameraDepthNearPoint) cameraDepthNearPoint.computeWorldMatrix();
-
-        const originalMinZ = camera.minZ;
-        const originalMaxZ = camera.maxZ;
-
-        const depthMinZ = cameraDepthNearPoint
-          ? Vector3.Distance(
-              camera.globalPosition,
-              cameraDepthNearPoint.absolutePosition
-            )
-          : 1;
-
-        const depthMaxZ = cameraDepthFarPoint
-          ? Vector3.Distance(
-              camera.globalPosition,
-              cameraDepthFarPoint.absolutePosition
-            )
-          : 100;
-
-        // camera.minZ = originalMinZ;
-        // camera.maxZ = originalMaxZ;
-
-        console.log("minZ and maxZ", camera.minZ, camera.maxZ);
-
-        // camera.minZ += 1;
-        // camera.maxZ = (camera.maxZ + 1) * 10;
-        const { engine, scene } = refs;
-        if (camera && engine && scene) {
-          camera.minZ = originalMinZ;
-          camera.maxZ = originalMaxZ;
-          scene.activeCamera = camera;
-
-          scene.render();
-
-          CreateScreenshotUsingRenderTarget(
-            engine,
-            scene?.activeCamera,
-            { width: 1920, height: 1080 },
-            (screenshotData) => {
-              // console.log("screenshotData");
-              // console.log(screenshotData);
-              // downloadBase64File("png", screenshotData, camera.name + ".png");
-            }
-          );
-
-          await delay(250);
-
-          camera.minZ = depthMinZ;
-          camera.maxZ = depthMaxZ;
-          engine.setSize(1920, 1080);
-
-          scene.enableDepthRenderer;
-          refs.depthRenderer = scene.enableDepthRenderer(camera, false);
-          // refs.depthRenderer = scene.enableDepthRenderer(camera, true);
-
-          // (refs.depthRenderer as any)._camera = camera;
-
-          console.log("modelFile.transformNodes");
-          console.log(modelFile.transformNodes);
-
-          // refs.scene?.setActiveCameraByName(camera.name);
-          scene.activeCamera = camera;
-          refs.depthPostProcess = new PostProcess(
-            "viewDepthShader",
-            "viewDepth",
-            [],
-            ["textureSampler", "SceneDepthTexture"], // textures
-            { width: 1920, height: 1080 },
-            camera,
-            // globalRefs.activeCamera
-            // Texture.NEAREST_SAMPLINGMODE // sampling
-            // globalRefs.scene.engine // engine,
-            // Texture.BILINEAR_SAMPLINGMODE,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            "viewDepth"
-          );
-          const depthRenderTarget = refs.depthRenderer?.getDepthMap();
-
-          if (depthRenderTarget) {
-            depthRenderTarget.activeCamera = camera;
-          }
-          refs.depthPostProcess.onApply = (effect) => {
-            if (depthRenderTarget) {
-              // console.log(
-              //   "depthRenderTargetdepthRenderTargetdepthRenderTarget"
-              // );
-
-              effect?.setTexture("SceneDepthTexture", depthRenderTarget);
-            }
-          };
-
-          scene.render();
-          await delay(250);
-          CreateScreenshotUsingRenderTarget(
-            engine,
-            scene?.activeCamera,
-            { width: 1920, height: 1080 },
-            (screenshotData) => {
-              // console.log("screenshotData");
-              // console.log(screenshotData);
-              // downloadBase64File("png", screenshotData, camera.name + ".png");
-            }
-          );
-          await delay(250);
-          // const depthMap = refs.depthRenderer?.getDepthMap();
-          // const depthTexture = depthMap?._texture;
-
-          // if (depthMap) {
-          console.log("");
-          // refs.depthRenderer?.setMaterialForRendering(scene.meshes);
-
-          // renderTextureToFile(
-          //   engine,
-          //   scene,
-          //   depthMap,
-          //   scene?.activeCamera,
-          //   { width: 300, height: 300 },
-          //   (screenshotData) => {
-          //     console.log("screenshotData", camera.name + ".png");
-          //     console.log(screenshotData);
-          //     downloadBase64File("png", screenshotData, camera.name + ".png");
-          //   }
-          // );
-          // }
-        }
-      }
-    }
-
-    setDifferentCameras();
-  }, [modelFile]);
+    asyncEffect();
+  }, [stairyDetailModelFile]);
   // useEffect(() => {
   //   console.log("Loaded Tasks", assetManagerResult);
   //   const stairyTask = assetManagerResult.taskNameMap[
