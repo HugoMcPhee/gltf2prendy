@@ -5,7 +5,8 @@
   "repository": "https://github.com/HugoMcPhee/hdr-to-babylon-env",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "tsc": "tsc"
   },
   "bin": "./index.js",
   "keywords": [
@@ -16,7 +17,12 @@
   "author": "Hugo McPhee",
   "license": "MIT",
   "dependencies": {
+    "babylonjs": "^5.54.0",
     "chrome-paths": "^1.0.1",
     "puppeteer": "^19.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^18.15.11",
+    "typescript": "^5.0.4"
   }
 }

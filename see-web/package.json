@@ -12,6 +12,8 @@
     "@babylonjs/core": "^5.52.0",
     "@babylonjs/gui": "^5.52.0",
     "@babylonjs/loaders": "^5.52.0",
+    "@ffmpeg/core": "^0.11.0",
+    "@ffmpeg/ffmpeg": "^0.11.6",
     "babylonjs": "^5.54.0",
     "babylonjs-serializers": "^5.54.0",
     "chootils": "^0.3.8",

@@ -1,5 +1,6 @@
 import {
   CreateScreenshotUsingRenderTarget,
+  CreateScreenshotUsingRenderTargetAsync,
   DepthRenderer,
   Engine,
   PostProcess,
@@ -10,6 +11,11 @@ import {
 import delay from "delay";
 import { loadModelFile } from "./loadModelFile";
 import { shaders } from "./shaders";
+
+export type RendersByCamName = Record<
+  string,
+  { colorPic?: string; depthPic?: string }
+>;
 
 function downloadBase64Image(
   contentType: string,
@@ -28,10 +34,12 @@ export default async function renderPics({
   engine,
   scene,
 }: {
-  modelFile: ReturnType<typeof loadModelFile>;
+  modelFile: Awaited<ReturnType<typeof loadModelFile>>;
   scene: Scene | null;
   engine: Engine | null;
 }) {
+  const cameraRendersByName: RendersByCamName = {};
+
   let depthRenderer: null | DepthRenderer = null;
   let depthPostProcess: null | PostProcess = null;
 
@@ -47,6 +55,7 @@ export default async function renderPics({
   ShaderStore.ShadersStore["viewDepthVertexShader"] = shaders.viewDepth.vertex;
   for (const camName of camNames) {
     const camera = modelFile.cameras[camName];
+    cameraRendersByName[camName] = {};
 
     camera.computeWorldMatrix();
     const cameraDepthFarPoint =
@@ -75,85 +84,86 @@ export default async function renderPics({
         )
       : 100;
 
-    if (camera && engine && scene) {
-      engine.setSize(1920, 1080);
+    if (!camera || !engine || !scene) break;
 
-      camera.minZ = 0.1;
-      camera.maxZ = 10000;
-      scene.activeCamera = camera;
+    engine.setSize(1920, 1080);
 
-      scene.render();
+    camera.minZ = 0.1;
+    camera.maxZ = 10000;
+    scene.activeCamera = camera;
 
-      await delay(250);
+    scene.render();
 
-      CreateScreenshotUsingRenderTarget(
-        engine,
-        scene?.activeCamera,
-        { width: 1920, height: 1080 },
-        (screenshotData) => {
-          downloadBase64Image("png", screenshotData, camera.name + ".png");
-        }
-      );
+    await delay(250);
 
-      await delay(250);
+    const colorScreenshotData = await CreateScreenshotUsingRenderTargetAsync(
+      engine,
+      scene?.activeCamera,
+      { width: 1920, height: 1080 }
+    );
+    cameraRendersByName[camName].colorPic = colorScreenshotData;
+    // downloadBase64Image("png", screenshotData, camera.name + ".png");
 
-      camera.minZ = depthMinZ;
-      camera.maxZ = depthMaxZ;
+    await delay(250);
 
-      scene.enableDepthRenderer;
-      depthRenderer = scene.enableDepthRenderer(camera, false);
+    camera.minZ = depthMinZ;
+    camera.maxZ = depthMaxZ;
 
-      // refs.scene?.setActiveCameraByName(camera.name);
-      scene.activeCamera = camera;
-      depthPostProcess = new PostProcess(
-        "viewDepthShader",
-        "viewDepth",
-        [],
-        ["textureSampler", "SceneDepthTexture"], // textures
-        { width: 1920, height: 1080 },
-        camera,
-        // globalRefs.activeCamera
-        // Texture.NEAREST_SAMPLINGMODE // sampling
-        // globalRefs.scene.engine // engine,
-        // Texture.BILINEAR_SAMPLINGMODE,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        "viewDepth"
-      );
-      const depthRenderTarget = depthRenderer?.getDepthMap();
+    scene.enableDepthRenderer;
+    depthRenderer = scene.enableDepthRenderer(camera, false);
 
-      if (depthRenderTarget) {
-        depthRenderTarget.activeCamera = camera;
-      }
-      depthPostProcess.onApply = (effect) => {
-        if (depthRenderTarget) {
-          effect?.setTexture("SceneDepthTexture", depthRenderTarget);
-        }
-      };
+    // refs.scene?.setActiveCameraByName(camera.name);
+    scene.activeCamera = camera;
+    depthPostProcess = new PostProcess(
+      "viewDepthShader",
+      "viewDepth",
+      [],
+      ["textureSampler", "SceneDepthTexture"], // textures
+      { width: 1920, height: 1080 },
+      camera,
+      // globalRefs.activeCamera
+      // Texture.NEAREST_SAMPLINGMODE // sampling
+      // globalRefs.scene.engine // engine,
+      // Texture.BILINEAR_SAMPLINGMODE,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "viewDepth"
+    );
+    const depthRenderTarget = depthRenderer?.getDepthMap();
 
-      scene.render();
-      await delay(250);
-      CreateScreenshotUsingRenderTarget(
-        engine,
-        scene?.activeCamera,
-        { width: 1920, height: 1080 },
-        (screenshotData) => {
-          downloadBase64Image(
-            "png",
-            screenshotData,
-            camera.name + "_depth" + ".png"
-          );
-        }
-      );
-      await delay(250);
-
-      depthPostProcess.dispose();
-
-      camera.minZ = originalMinZ;
-      camera.maxZ = originalMaxZ;
+    if (depthRenderTarget) {
+      depthRenderTarget.activeCamera = camera;
     }
+    depthPostProcess.onApply = (effect) => {
+      if (depthRenderTarget) {
+        effect?.setTexture("SceneDepthTexture", depthRenderTarget);
+      }
+    };
+
+    scene.render();
+    await delay(250);
+    const depthScreenshotData = await CreateScreenshotUsingRenderTargetAsync(
+      engine,
+      scene?.activeCamera,
+      { width: 1920, height: 1080 }
+    );
+    cameraRendersByName[camName].depthPic = depthScreenshotData;
+
+    // downloadBase64Image(
+    //   "png",
+    //   screenshotData,
+    //   camera.name + "_depth" + ".png"
+    // );
+
+    await delay(250);
+
+    depthPostProcess.dispose();
+
+    camera.minZ = originalMinZ;
+    camera.maxZ = originalMaxZ;
   }
+  return cameraRendersByName;
 }
