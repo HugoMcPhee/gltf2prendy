@@ -19,7 +19,7 @@ import {
   Scene,
   useBeforeRender,
 } from "react-babylonjs";
-import { loadModelFile } from "./helpers/loadModelFile";
+import { loadGltfFileAsBase64, loadModelFile } from "./helpers/loadModelFile";
 import renderPics from "./helpers/renderPics";
 
 const refs = {
@@ -83,6 +83,13 @@ const MyModels = () => {
 
   useEffect(() => {
     async function asyncEffect() {
+      const modelBase64 = await loadGltfFileAsBase64(stairyDetailModelFile);
+
+      console.log("----------------");
+      console.log("modelBase64");
+      console.log(modelBase64);
+      console.log(typeof modelBase64);
+
       const modelFile = await loadModelFile({
         modelPath: stairyDetailModelFile,
         scene: refs.scene,
@@ -91,7 +98,7 @@ const MyModels = () => {
       console.log(modelFile);
 
       console.log("modelFile.transformNodes");
-      console.log(modelFile.transformNodes);
+      console.log(modelFile?.transformNodes);
 
       renderPics({ engine: refs.engine, scene: refs.scene, modelFile });
     }

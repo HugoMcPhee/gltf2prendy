@@ -38,6 +38,7 @@ export default async function renderPics({
   scene: Scene | null;
   engine: Engine | null;
 }) {
+  if (!modelFile) return;
   const cameraRendersByName: RendersByCamName = {};
 
   let depthRenderer: null | DepthRenderer = null;
