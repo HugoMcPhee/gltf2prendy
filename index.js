@@ -28,9 +28,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const BABYLON = __importStar(require("babylonjs"));
-// import puppeteer from "puppeteer";
-const puppeteer_core_1 = __importDefault(require("puppeteer-core"));
-const chrome_paths_1 = __importDefault(require("chrome-paths"));
+const puppeteer_1 = __importDefault(require("puppeteer"));
 // import chromePaths from "chrome-paths";
 const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
@@ -102,7 +100,7 @@ function splitFilePath(fullPathOriginal) {
     // console.log("gltfFilesData");
     // console.log(gltfFilesData);
     // Don't disable the gpu
-    let args = puppeteer_core_1.default.defaultArgs().filter((arg) => arg !== "--disable-gpu");
+    let args = puppeteer_1.default.defaultArgs().filter((arg) => arg !== "--disable-gpu");
     // Run in non-headless mode
     args = args.filter((arg) => arg !== "--headless");
     // Use desktop graphics
@@ -118,12 +116,12 @@ function splitFilePath(fullPathOriginal) {
         // headless: true,
         headless: false,
         // ignoreDefaultArgs: true,
-        executablePath: chrome_paths_1.default.chrome,
+        // executablePath: chromePaths.chrome,
         // args,
         args: [`--window-size=1920,1080`],
         defaultViewport: null,
     };
-    const browser = await puppeteer_core_1.default.launch(launchOptions);
+    const browser = await puppeteer_1.default.launch(launchOptions);
     // const browser = await puppeteer.launch();
     const page = await browser.newPage();
     await page.addStyleTag({
@@ -277,19 +275,21 @@ function splitFilePath(fullPathOriginal) {
                 container, // container.removeAllFromScene();
             };
         }
+        /*
+  
+           #ifdef GL_ES
+              precision mediump float;
+            #endif
+        
+            // #ifdef LOGARITHMICDEPTH
+            //   gl_FragDepthEXT = log2(vFragmentDepth) * logarithmicDepthConstant * 0.5;
+            // #endif
+  
+        */
         const shaders = {
             viewDepth: {
                 fragment: `
           precision highp float;
-      
-          #ifdef GL_ES
-            precision mediump float;
-          #endif
-      
-          // #ifdef LOGARITHMICDEPTH
-          //   gl_FragDepthEXT = log2(vFragmentDepth) * logarithmicDepthConstant * 0.5;
-          // #endif
-          
           
           /// <summary>
           /// Uniform variables.
@@ -324,10 +324,6 @@ function splitFilePath(fullPathOriginal) {
           
           const vec2 madd = vec2(0.5, 0.5);
           
-          // #ifdef LOGARITHMICDEPTH
-          //   vFragmentDepth = 1.0 + gl_Position.w;
-          //   gl_Position.z = log2(max(0.000001, vFragmentDepth)) * logarithmicDepthConstant;
-          // #endif
           
           #define CUSTOM_VERTEX_DEFINITIONS
           
@@ -354,9 +350,13 @@ function splitFilePath(fullPathOriginal) {
             const cameraRendersByName = {};
             let depthRenderer = null;
             let depthPostProcess = null;
+            console.log("modelFile.transformNodes");
+            // console.log(modelFile.transformNodes);
+            // await delay(1000);
             modelFile.transformNodes.walls?.setEnabled(false);
             modelFile.transformNodes.triggers?.setEnabled(false);
             modelFile.transformNodes.floors?.setEnabled(false);
+            // await delay(100000);
             const camNames = Object.keys(modelFile.cameras);
             for (const camName of camNames) {
                 modelFile.transformNodes?.[camName]?.setEnabled(false);
@@ -428,33 +428,22 @@ function splitFilePath(fullPathOriginal) {
                 // refs.scene?.setActiveCameraByName(camera.name);
                 scene.activeCamera = camera;
                 console.log("before depth post process");
-                // depthPostProcess = new BABYLON.PostProcess(
-                //   "viewDepthShader",
-                //   "viewDepth",
-                //   [],
-                //   ["textureSampler", "SceneDepthTexture"], // textures
-                //   { width: 1920, height: 1080 },
-                //   camera,
-                //   // globalRefs.activeCamera
-                //   // Texture.NEAREST_SAMPLINGMODE // sampling
-                //   // globalRefs.scene.engine // engine,
-                //   // Texture.BILINEAR_SAMPLINGMODE,
-                //   undefined,
-                //   undefined,
-                //   undefined,
-                //   undefined,
-                //   undefined,
-                //   "viewDepth"
-                // );
+                depthPostProcess = new BABYLON.PostProcess("viewDepthShader", "viewDepth", [], ["textureSampler", "SceneDepthTexture"], // textures
+                { width: 1920, height: 1080 }, camera, 
+                // globalRefs.activeCamera
+                // Texture.NEAREST_SAMPLINGMODE // sampling
+                // globalRefs.scene.engine // engine,
+                // Texture.BILINEAR_SAMPLINGMODE,
+                undefined, undefined, undefined, undefined, undefined, "viewDepth");
                 const depthRenderTarget = depthRenderer?.getDepthMap();
                 if (depthRenderTarget) {
                     depthRenderTarget.activeCamera = camera;
                 }
-                // depthPostProcess.onApply = (effect) => {
-                //   if (depthRenderTarget) {
-                //     effect?.setTexture("SceneDepthTexture", depthRenderTarget);
-                //   }
-                // };
+                depthPostProcess.onApply = (effect) => {
+                    if (depthRenderTarget) {
+                        effect?.setTexture("SceneDepthTexture", depthRenderTarget);
+                    }
+                };
                 console.log("before render");
                 scene.render();
                 await delay(250);
