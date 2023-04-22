@@ -9,7 +9,47 @@ import chromePaths from "chrome-paths";
 import fs from "fs/promises";
 import path, { resolve } from "path";
 import { log } from "console";
+import delay from "delay";
 // import delayNode from "delay";
+
+type ModelFile = {
+  meshes: Record<string, BABYLON.AbstractMesh>;
+  materials: Record<string, BABYLON.PBRMaterial>;
+  textures: Record<string, BABYLON.Texture>;
+  transformNodes: Record<string, BABYLON.TransformNode>;
+  animationGroups: Record<string, BABYLON.AnimationGroup>;
+  skeletons: Record<string, BABYLON.Skeleton>;
+  cameras: Record<string, BABYLON.Camera>;
+  container: BABYLON.AssetContainer;
+};
+
+type PageRefs = {
+  exampleText?: string;
+  canvas?: HTMLCanvasElement;
+  engine?: BABYLON.Engine;
+  scene?: BABYLON.Scene;
+  modelFile?: ModelFile;
+  depthPostProcess?: BABYLON.PostProcess;
+  // functions
+  delay?: (time: number) => Promise<void>;
+  // from chootils
+  forEach?: <T_ArrayItem>(
+    theArray: T_ArrayItem[] | Readonly<T_ArrayItem[]>,
+    whatToDo: (item: T_ArrayItem, index: number) => any
+  ) => void;
+  keyBy?: <T_ArrayItem extends Record<any, any>>(
+    theArray: T_ArrayItem[],
+    theKey: keyof T_ArrayItem,
+    transformKey?: (theKey: string) => string, // to allow editing a key before storing it
+    excludeName?: string
+  ) => Record<string, T_ArrayItem>;
+};
+
+declare global {
+  interface Window {
+    pageRefs: PageRefs;
+  }
+}
 
 type HDRFileProbeData = { name: string; data: string };
 type EnvFileData = { name: string; data: string | ArrayBuffer | null };
@@ -49,6 +89,7 @@ function splitFilePath(fullPathOriginal: string) {
   // type HDRFileProbeData = { name: "probe.hdr" , data: base64String}
   const hdrFilesData = [] as HDRFileProbeData[];
   const gltfFilesData = {} as GltfFilesData;
+  // let camNames = [] as string[]; // use evaluate to get camNames
 
   const HDRMimeType = "image/vnd.radiance";
   const prefixForHDRDataUrl = `data:${HDRMimeType};base64,`;
@@ -155,206 +196,233 @@ function splitFilePath(fullPathOriginal: string) {
   //   console.log(thing);
   // }
 
-  const envFilesData = await page.evaluate(
-    async (hdrFilesData, probeResolution, gltfFilesData) => {
-      // type EnvFileData = { name: "probe.hdr" , data: binaryString}
-      const envFilesData = [] as EnvFileData[];
+  // declare var pageRefs: typeof pageRefsType;
 
-      // ----------------------------------
-      // Setting up a babylonjs scene
-      // ----------------------------------
-      var canvas = document.createElement("canvas");
-      canvas.id = "renderCanvas";
-      canvas.width = 1920;
-      canvas.height = 1080;
-      document.body.appendChild(canvas);
+  const { envFilesData, camNames } =
+    (await page.evaluate(
+      async (hdrFilesData, probeResolution, gltfFilesData) => {
+        // type EnvFileData = { name: "probe.hdr" , data: binaryString}
+        const envFilesData = [] as EnvFileData[];
 
-      // logSomethingToConsole("hello");
+        // ----------------------------------
+        // From chootils
+        // TODO (import in node and transfer to pupeteer page?)
+        // ----------------------------------
 
-      var engine = new BABYLON.Engine(canvas, true, {
-        preserveDrawingBuffer: true,
-        stencil: true,
-        premultipliedAlpha: false,
-      });
-      var scene = new BABYLON.Scene(engine);
-      // logSomethingToConsole(scene);
-      var camera = new BABYLON.FreeCamera(
-        "camera1",
-        new BABYLON.Vector3(0, 5, -10),
-        scene
-      );
-
-      const mainLight = new BABYLON.HemisphericLight(
-        "light1",
-        BABYLON.Vector3.Up(),
-        scene
-      );
-      mainLight.intensity = 0.7;
-
-      camera.setTarget(BABYLON.Vector3.Zero());
-      camera.attachControl(canvas, true);
-
-      engine.setSize(1920, 1080);
-
-      // ----------------------------------
-      // From chootils
-      // TODO (import in node and transfer to pupeteer page?)
-      // ----------------------------------
-
-      function forEach<T_ArrayItem>(
-        theArray: T_ArrayItem[] | Readonly<T_ArrayItem[]>,
-        whatToDo: (item: T_ArrayItem, index: number) => any
-      ) {
-        const arrayLength = theArray.length;
-        for (let index = 0; index < arrayLength; index++) {
-          whatToDo(theArray[index], index);
+        function forEach<T_ArrayItem>(
+          theArray: T_ArrayItem[] | Readonly<T_ArrayItem[]>,
+          whatToDo: (item: T_ArrayItem, index: number) => any
+        ) {
+          const arrayLength = theArray.length;
+          for (let index = 0; index < arrayLength; index++) {
+            whatToDo(theArray[index], index);
+          }
         }
-      }
 
-      function keyBy<T_ArrayItem extends Record<any, any>>(
-        theArray: T_ArrayItem[],
-        theKey: keyof T_ArrayItem = "name",
-        transformKey?: (theKey: string) => string, // to allow editing a key before storing it
-        excludeName?: string
-      ) {
-        const newObject: Record<string, T_ArrayItem> = {};
-        if (excludeName) {
-          forEach(theArray, (loopedItem) => {
-            const loopedName: string = loopedItem[theKey];
-            if (loopedName !== excludeName) {
+        function keyBy<T_ArrayItem extends Record<any, any>>(
+          theArray: T_ArrayItem[],
+          theKey: keyof T_ArrayItem = "name",
+          transformKey?: (theKey: string) => string, // to allow editing a key before storing it
+          excludeName?: string
+        ) {
+          const newObject: Record<string, T_ArrayItem> = {};
+          if (excludeName) {
+            forEach(theArray, (loopedItem) => {
+              const loopedName: string = loopedItem[theKey];
+              if (loopedName !== excludeName) {
+                const newKey =
+                  transformKey?.(loopedItem[theKey]) ?? loopedItem[theKey];
+                newObject[newKey] = loopedItem;
+              }
+            });
+          } else {
+            forEach(theArray, (loopedItem) => {
               const newKey =
                 transformKey?.(loopedItem[theKey]) ?? loopedItem[theKey];
               newObject[newKey] = loopedItem;
-            }
-          });
-        } else {
-          forEach(theArray, (loopedItem) => {
-            const newKey =
-              transformKey?.(loopedItem[theKey]) ?? loopedItem[theKey];
-            newObject[newKey] = loopedItem;
-          });
+            });
+          }
+          return newObject;
         }
-        return newObject;
-      }
 
-      // ----------------------------------
-      // Other helpers
-      // ----------------------------------
+        window.pageRefs = {
+          delay: async (time: number) => {
+            return new Promise((resolve, reject) => {
+              setTimeout(resolve, time);
+            });
+          },
+          forEach,
+          keyBy,
+        };
 
-      async function delay(time: number) {
-        return new Promise((resolve, reject) => {
-          setTimeout(resolve, time);
+        const pageRefs = window.pageRefs;
+
+        pageRefs.exampleText = "hello";
+
+        console.log("pageRefs.exampleText");
+        console.log(pageRefs.exampleText);
+
+        const { delay } = window.pageRefs;
+
+        if (!delay) return;
+        // ----------------------------------
+        // Setting up a babylonjs scene
+        // ----------------------------------
+        var canvas = document.createElement("canvas");
+        canvas.id = "renderCanvas";
+        canvas.width = 1920;
+        canvas.height = 1080;
+        document.body.appendChild(canvas);
+
+        // logSomethingToConsole("hello");
+
+        var engine = new BABYLON.Engine(canvas, true, {
+          preserveDrawingBuffer: true,
+          stencil: true,
+          premultipliedAlpha: false,
         });
-      }
+        pageRefs.engine = engine;
 
-      // ----------------------------------
-      // Rendering GTLF file pics
-      // ----------------------------------
+        var scene = new BABYLON.Scene(engine);
 
-      function getFileFromBase64(base64String: string, fileName: string): File {
-        console.log("base64String");
-        console.log(base64String);
+        pageRefs.scene = scene;
 
-        const editedBase64 = base64String
-          .replace("data:", "")
-          .replace(/^.+,/, "");
-
-        const byteString = window.atob(editedBase64);
-        const byteStringLength = byteString.length;
-        const byteArray = new Uint8Array(byteStringLength);
-        for (let i = 0; i < byteStringLength; i++) {
-          byteArray[i] = byteString.charCodeAt(i);
-        }
-        const blob = new Blob([byteArray], {
-          type: "application/octet-stream",
-        });
-        return new File([blob], fileName, { type: "application/octet-stream" });
-      }
-
-      async function loadModelFile({
-        modelBase64,
-        scene,
-      }: {
-        modelBase64: string;
-        scene: BABYLON.Scene | null;
-      }) {
-        if (!scene) return;
-        // const modelAsBase64 = await loadGltfFileAsBase64(modelPath);
-        // const modelAsBase64 = await loadGltfFileAsBase64(modelPath);
-        // const modelAsBase64 = gltfFilesData.detailModel;
-        const modelAsBase64 = modelBase64;
-        const modelAsBase64Edited = modelAsBase64;
-        if (!modelAsBase64Edited) return;
-        const modelAsFile = getFileFromBase64(
-          modelAsBase64Edited,
-          "exampleFilename.glb"
+        // logSomethingToConsole(scene);
+        var camera = new BABYLON.FreeCamera(
+          "camera1",
+          new BABYLON.Vector3(0, 5, -10),
+          scene
         );
 
-        const container: BABYLON.AssetContainer =
-          await BABYLON.SceneLoader.LoadAssetContainerAsync(
-            "model",
-            modelAsFile,
-            scene
+        const mainLight = new BABYLON.HemisphericLight(
+          "light1",
+          BABYLON.Vector3.Up(),
+          scene
+        );
+        mainLight.intensity = 0.7;
+
+        camera.setTarget(BABYLON.Vector3.Zero());
+        camera.attachControl(canvas, true);
+
+        engine.setSize(1920, 1080);
+
+        // ----------------------------------
+        // Other helpers
+        // ----------------------------------
+
+        // ----------------------------------
+        // Rendering GTLF file pics
+        // ----------------------------------
+
+        function getFileFromBase64(
+          base64String: string,
+          fileName: string
+        ): File {
+          console.log("base64String");
+          console.log(base64String);
+
+          const editedBase64 = base64String
+            .replace("data:", "")
+            .replace(/^.+,/, "");
+
+          const byteString = window.atob(editedBase64);
+          const byteStringLength = byteString.length;
+          const byteArray = new Uint8Array(byteStringLength);
+          for (let i = 0; i < byteStringLength; i++) {
+            byteArray[i] = byteString.charCodeAt(i);
+          }
+          const blob = new Blob([byteArray], {
+            type: "application/octet-stream",
+          });
+          return new File([blob], fileName, {
+            type: "application/octet-stream",
+          });
+        }
+
+        async function loadModelFile({
+          modelBase64,
+          scene,
+        }: {
+          modelBase64: string;
+          scene: BABYLON.Scene | null;
+        }) {
+          if (!scene) return;
+          // const modelAsBase64 = await loadGltfFileAsBase64(modelPath);
+          // const modelAsBase64 = await loadGltfFileAsBase64(modelPath);
+          // const modelAsBase64 = gltfFilesData.detailModel;
+          const modelAsBase64 = modelBase64;
+          const modelAsBase64Edited = modelAsBase64;
+          if (!modelAsBase64Edited) return;
+          const modelAsFile = getFileFromBase64(
+            modelAsBase64Edited,
+            "exampleFilename.glb"
           );
 
-        // const container: AssetContainer = await SceneLoader.LoadAssetContainerAsync(
-        //   modelPath,
-        //   undefined,
-        //   scene
-        // );
-        container.addAllToScene();
+          const container: BABYLON.AssetContainer =
+            await BABYLON.SceneLoader.LoadAssetContainerAsync(
+              "model",
+              modelAsFile,
+              scene
+            );
 
-        const meshes: Record<string, BABYLON.AbstractMesh> = keyBy(
-          container.meshes
-        ) as Record<string, BABYLON.AbstractMesh>;
-        const materials: Record<string, BABYLON.PBRMaterial> = keyBy(
-          container.materials as BABYLON.PBRMaterial[]
-        );
-        const textures: Record<string, BABYLON.Texture> = keyBy(
-          container.textures
-        ) as Record<string, BABYLON.Texture>;
+          // const container: AssetContainer = await SceneLoader.LoadAssetContainerAsync(
+          //   modelPath,
+          //   undefined,
+          //   scene
+          // );
+          container.addAllToScene();
 
-        let cameras: Record<string, BABYLON.Camera> = {};
-        forEach(container.cameras, (camera) => {
-          const camName = camera?.parent?.name ?? camera.name;
+          const meshes: Record<string, BABYLON.AbstractMesh> = keyBy(
+            container.meshes
+          ) as Record<string, BABYLON.AbstractMesh>;
+          const materials: Record<string, BABYLON.PBRMaterial> = keyBy(
+            container.materials as BABYLON.PBRMaterial[]
+          );
+          const textures: Record<string, BABYLON.Texture> = keyBy(
+            container.textures
+          ) as Record<string, BABYLON.Texture>;
 
-          camera.name = camName;
-          camera.id = camName;
-          cameras[camName] = camera;
+          let cameras: Record<string, BABYLON.Camera> = {};
+          forEach(container.cameras, (camera) => {
+            const camName = camera?.parent?.name ?? camera.name;
 
-          if (camera.parent) {
-            // change the transform node name holding the camera,
-            // since nomad calls it the same as the camera name,
-            // but there's already a group called that
-            camera.parent.name = camName + "_nomad";
-            camera.parent.id = camName + "_nomad";
-          }
-        });
+            camera.name = camName;
+            camera.id = camName;
+            cameras[camName] = camera;
 
-        const transformNodes: Record<string, BABYLON.TransformNode> = keyBy(
-          container.transformNodes
-        );
+            if (camera.parent) {
+              // change the transform node name holding the camera,
+              // since nomad calls it the same as the camera name,
+              // but there's already a group called that
+              camera.parent.name = camName + "_nomad";
+              camera.parent.id = camName + "_nomad";
+            }
+          });
 
-        const animationGroups: Record<string, BABYLON.AnimationGroup> = keyBy(
-          container.animationGroups
-        );
-        const skeletons: Record<string, BABYLON.Skeleton> = keyBy(
-          container.skeletons
-        );
+          const transformNodes: Record<string, BABYLON.TransformNode> = keyBy(
+            container.transformNodes
+          );
 
-        return {
-          meshes,
-          materials,
-          textures,
-          transformNodes,
-          animationGroups,
-          skeletons,
-          cameras,
-          container, // container.removeAllFromScene();
-        };
-      }
+          const animationGroups: Record<string, BABYLON.AnimationGroup> = keyBy(
+            container.animationGroups
+          );
+          const skeletons: Record<string, BABYLON.Skeleton> = keyBy(
+            container.skeletons
+          );
 
-      /*
+          return {
+            meshes,
+            materials,
+            textures,
+            transformNodes,
+            animationGroups,
+            skeletons,
+            cameras,
+            container, // container.removeAllFromScene();
+          };
+        }
+
+        /*
 
          #ifdef GL_ES
             precision mediump float;
@@ -366,9 +434,9 @@ function splitFilePath(fullPathOriginal: string) {
 
       */
 
-      const shaders = {
-        viewDepth: {
-          fragment: `
+        const shaders = {
+          viewDepth: {
+            fragment: `
           precision highp float;
           
           /// <summary>
@@ -393,7 +461,7 @@ function splitFilePath(fullPathOriginal: string) {
           gl_FragColor = sceneDepthColors;
           }
               `,
-          vertex: `
+            vertex: `
           // Attributes
           attribute vec2 position;
           
@@ -418,318 +486,536 @@ function splitFilePath(fullPathOriginal: string) {
           #define CUSTOM_VERTEX_MAIN_END
           }
               `,
-        },
-      };
+          },
+        };
 
-      type RendersByCamName = Record<
-        string,
-        { colorPic?: string; depthPic?: string }
-      >;
+        type RendersByCamName = Record<
+          string,
+          { colorPic?: string; depthPic?: string }
+        >;
 
-      async function renderPics({
-        modelFile,
-        engine,
-        scene,
-      }: {
-        modelFile: Awaited<ReturnType<typeof loadModelFile>>;
-        scene: BABYLON.Scene | null;
-        engine: BABYLON.Engine | null;
-      }) {
-        console.log("---------------------------");
-        console.log("---------------------------");
-        console.log("---------------------------");
-        console.log("renderPics");
+        async function renderPics({
+          modelFile,
+          engine,
+          scene,
+        }: {
+          modelFile: Awaited<ReturnType<typeof loadModelFile>>;
+          scene: BABYLON.Scene | null;
+          engine: BABYLON.Engine | null;
+        }) {
+          console.log("---------------------------");
+          console.log("---------------------------");
+          console.log("---------------------------");
+          console.log("renderPics");
 
-        if (!modelFile) return;
-        const cameraRendersByName: RendersByCamName = {};
+          if (!modelFile) return;
+          const cameraRendersByName: RendersByCamName = {};
 
-        let depthRenderer: null | BABYLON.DepthRenderer = null;
-        let depthPostProcess: null | BABYLON.PostProcess = null;
-
-        console.log("modelFile.transformNodes");
-        // console.log(modelFile.transformNodes);
-
-        // await delay(1000);
-
-        modelFile.transformNodes.walls?.setEnabled(false);
-        modelFile.transformNodes.triggers?.setEnabled(false);
-        modelFile.transformNodes.floors?.setEnabled(false);
-        // await delay(100000);
-
-        const camNames = Object.keys(modelFile.cameras);
-        for (const camName of camNames) {
-          modelFile.transformNodes?.[camName]?.setEnabled(false);
-        }
-        console.log("got to here 1");
-
-        BABYLON.ShaderStore.ShadersStore["viewDepthPixelShader"] =
-          shaders.viewDepth.fragment;
-        BABYLON.ShaderStore.ShadersStore["viewDepthVertexShader"] =
-          shaders.viewDepth.vertex;
-        console.log("got to here 2");
-        console.log(camNames);
-        for (const camName of camNames) {
-          const camera = modelFile.cameras[camName];
-          cameraRendersByName[camName] = {};
-
-          console.log("got to here 3", camName);
-          camera.computeWorldMatrix();
-          const cameraDepthFarPoint =
-            modelFile.transformNodes[camName + "_depth_far"] ??
-            modelFile.transformNodes[camName + "_depth"];
-          const cameraDepthNearPoint =
-            modelFile.transformNodes[camName + "_depth_near"];
-
-          if (cameraDepthFarPoint) cameraDepthFarPoint.computeWorldMatrix();
-          if (cameraDepthNearPoint) cameraDepthNearPoint.computeWorldMatrix();
-
-          const originalMinZ = camera.minZ;
-          const originalMaxZ = camera.maxZ;
-
-          const depthMinZ = cameraDepthNearPoint
-            ? BABYLON.Vector3.Distance(
-                camera.globalPosition,
-                cameraDepthNearPoint.absolutePosition
-              )
-            : 1;
-
-          const depthMaxZ = cameraDepthFarPoint
-            ? BABYLON.Vector3.Distance(
-                camera.globalPosition,
-                cameraDepthFarPoint.absolutePosition
-              )
-            : 100;
-
-          if (!camera || !engine || !scene) break;
-
-          engine.setSize(1920, 1080);
-
-          camera.minZ = 0.1;
-          camera.maxZ = 10000;
-          scene.activeCamera = camera;
-
-          scene.render();
-          console.log("before first delay");
-
-          await delay(250);
-          console.log("after first delay");
-
-          function makeScreenShotAsync(
-            engine: BABYLON.Engine,
-            camera: BABYLON.Camera
-          ) {
-            return new Promise<string | undefined>((resolve, reject) => {
-              if (camera) {
-                BABYLON.CreateScreenshotUsingRenderTarget(
-                  engine,
-                  camera,
-                  { width: 1920, height: 1080 },
-                  (result) => {
-                    resolve(result);
-                  }
-                );
-              } else {
-                resolve(undefined);
-              }
-            });
-          }
-
-          // const colorScreenshotData =
-          //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
-          //     engine,
-          //     scene?.activeCamera,
-          //     { width: 1920, height: 1080 }
-          //   );
-
-          console.log("after screenshot");
-
-          // cameraRendersByName[camName].colorPic = colorScreenshotData;
-          // downloadBase64Image("png", screenshotData, camera.name + ".png");
-
-          await delay(250);
-          console.log("after storic color pic");
-          camera.minZ = depthMinZ;
-          camera.maxZ = depthMaxZ;
-
-          scene.enableDepthRenderer;
-          depthRenderer = scene.enableDepthRenderer(camera, false);
-
-          // refs.scene?.setActiveCameraByName(camera.name);
-          scene.activeCamera = camera;
-
-          console.log("before depth post process");
-          depthPostProcess = new BABYLON.PostProcess(
-            "viewDepthShader",
-            "viewDepth",
-            [],
-            ["textureSampler", "SceneDepthTexture"], // textures
-            { width: 1920, height: 1080 },
-            camera,
-            // globalRefs.activeCamera
-            // Texture.NEAREST_SAMPLINGMODE // sampling
-            // globalRefs.scene.engine // engine,
-            // Texture.BILINEAR_SAMPLINGMODE,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            "viewDepth"
-          );
-          const depthRenderTarget = depthRenderer?.getDepthMap();
-
-          if (depthRenderTarget) {
-            depthRenderTarget.activeCamera = camera;
-          }
-          depthPostProcess.onApply = (effect) => {
-            if (depthRenderTarget) {
-              effect?.setTexture("SceneDepthTexture", depthRenderTarget);
-            }
-          };
-
-          console.log("before render");
-
-          scene.render();
-          await delay(250);
-          console.log("before depth screenshot");
-          // const depthScreenshotData =
-          //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
-          //     engine,
-          //     scene?.activeCamera,
-          //     { width: 1920, height: 1080 }
-          //   );
-          // cameraRendersByName[camName].depthPic = depthScreenshotData;
-
-          // const depthScreenshotData = await makeScreenShotAsync(
-          //   engine,
-          //   scene?.activeCamera
-          // );
-          // const depthScreenshotData =
-          //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
-          //     engine,
-          //     scene?.activeCamera,
-          //     { width: 1920, height: 1080 }
-          //   );
-          // cameraRendersByName[camName].depthPic = depthScreenshotData;
-
-          // await takeScreenshot({ path: `./public/${camName}_depth.png` });
-
-          // downloadBase64Image(
-          //   "png",
-          //   screenshotData,
-          //   camera.name + "_depth" + ".png"
-          // );
-
-          await delay(250);
-
-          // depthPostProcess.dispose();
-
-          camera.minZ = originalMinZ;
-          camera.maxZ = originalMaxZ;
-        }
-        console.log("after camNames");
-
-        return cameraRendersByName;
-      }
-
-      async function handleGltfModel() {
-        if (gltfFilesData.detailModel) {
-          console.log("---------------------");
-          console.log("camera file");
-          const modelFile = await loadModelFile({
-            modelBase64: gltfFilesData.detailModel,
-            scene: scene,
-          });
-          console.log("modelFile");
-          console.log(modelFile);
+          let depthRenderer: null | BABYLON.DepthRenderer = null;
+          let depthPostProcess: null | BABYLON.PostProcess = null;
 
           console.log("modelFile.transformNodes");
-          console.log(modelFile?.transformNodes);
+          // console.log(modelFile.transformNodes);
 
-          const cameraRendersByName = await renderPics({
-            scene,
-            engine,
-            modelFile,
-          });
+          // await delay(1000);
 
-          console.log("cameraRendersByName");
-          console.log(cameraRendersByName);
+          modelFile.transformNodes.walls?.setEnabled(false);
+          modelFile.transformNodes.triggers?.setEnabled(false);
+          modelFile.transformNodes.floors?.setEnabled(false);
+          // await delay(100000);
+
+          const camNames = Object.keys(modelFile.cameras);
+          for (const camName of camNames) {
+            modelFile.transformNodes?.[camName]?.setEnabled(false);
+          }
+          console.log("got to here 1");
+
+          BABYLON.ShaderStore.ShadersStore["viewDepthPixelShader"] =
+            shaders.viewDepth.fragment;
+          BABYLON.ShaderStore.ShadersStore["viewDepthVertexShader"] =
+            shaders.viewDepth.vertex;
+          console.log("got to here 2");
+          console.log(camNames);
+          for (const camName of camNames) {
+            if (!delay) return;
+
+            const camera = modelFile.cameras[camName];
+            cameraRendersByName[camName] = {};
+
+            console.log("got to here 3", camName);
+            camera.computeWorldMatrix();
+            const cameraDepthFarPoint =
+              modelFile.transformNodes[camName + "_depth_far"] ??
+              modelFile.transformNodes[camName + "_depth"];
+            const cameraDepthNearPoint =
+              modelFile.transformNodes[camName + "_depth_near"];
+
+            if (cameraDepthFarPoint) cameraDepthFarPoint.computeWorldMatrix();
+            if (cameraDepthNearPoint) cameraDepthNearPoint.computeWorldMatrix();
+
+            const originalMinZ = camera.minZ;
+            const originalMaxZ = camera.maxZ;
+
+            const depthMinZ = cameraDepthNearPoint
+              ? BABYLON.Vector3.Distance(
+                  camera.globalPosition,
+                  cameraDepthNearPoint.absolutePosition
+                )
+              : 1;
+
+            const depthMaxZ = cameraDepthFarPoint
+              ? BABYLON.Vector3.Distance(
+                  camera.globalPosition,
+                  cameraDepthFarPoint.absolutePosition
+                )
+              : 100;
+
+            if (!camera || !engine || !scene) break;
+
+            engine.setSize(1920, 1080);
+
+            camera.minZ = 0.1;
+            camera.maxZ = 10000;
+            scene.activeCamera = camera;
+
+            scene.render();
+            console.log("before first delay");
+
+            await delay(100);
+            console.log("after first delay");
+
+            function makeScreenShotAsync(
+              engine: BABYLON.Engine,
+              camera: BABYLON.Camera
+            ) {
+              return new Promise<string | undefined>((resolve, reject) => {
+                if (camera) {
+                  BABYLON.CreateScreenshotUsingRenderTarget(
+                    engine,
+                    camera,
+                    { width: 1920, height: 1080 },
+                    (result) => {
+                      resolve(result);
+                    }
+                  );
+                } else {
+                  resolve(undefined);
+                }
+              });
+            }
+
+            // const colorScreenshotData =
+            //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
+            //     engine,
+            //     scene?.activeCamera,
+            //     { width: 1920, height: 1080 }
+            //   );
+
+            console.log("after screenshot");
+
+            // cameraRendersByName[camName].colorPic = colorScreenshotData;
+            // downloadBase64Image("png", screenshotData, camera.name + ".png");
+
+            await delay(100);
+            console.log("after storic color pic");
+            camera.minZ = depthMinZ;
+            camera.maxZ = depthMaxZ;
+
+            scene.enableDepthRenderer;
+            depthRenderer = scene.enableDepthRenderer(camera, false);
+
+            // refs.scene?.setActiveCameraByName(camera.name);
+            scene.activeCamera = camera;
+
+            console.log("before depth post process");
+            depthPostProcess = new BABYLON.PostProcess(
+              "viewDepthShader",
+              "viewDepth",
+              [],
+              ["textureSampler", "SceneDepthTexture"], // textures
+              { width: 1920, height: 1080 },
+              camera,
+              // globalRefs.activeCamera
+              // Texture.NEAREST_SAMPLINGMODE // sampling
+              // globalRefs.scene.engine // engine,
+              // Texture.BILINEAR_SAMPLINGMODE,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              "viewDepth"
+            );
+            const depthRenderTarget = depthRenderer?.getDepthMap();
+
+            if (depthRenderTarget) {
+              depthRenderTarget.activeCamera = camera;
+            }
+            depthPostProcess.onApply = (effect) => {
+              if (depthRenderTarget) {
+                effect?.setTexture("SceneDepthTexture", depthRenderTarget);
+              }
+            };
+
+            console.log("before render");
+
+            scene.render();
+            await delay(100);
+            console.log("before depth screenshot");
+            // const depthScreenshotData =
+            //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
+            //     engine,
+            //     scene?.activeCamera,
+            //     { width: 1920, height: 1080 }
+            //   );
+            // cameraRendersByName[camName].depthPic = depthScreenshotData;
+
+            // const depthScreenshotData = await makeScreenShotAsync(
+            //   engine,
+            //   scene?.activeCamera
+            // );
+            // const depthScreenshotData =
+            //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
+            //     engine,
+            //     scene?.activeCamera,
+            //     { width: 1920, height: 1080 }
+            //   );
+            // cameraRendersByName[camName].depthPic = depthScreenshotData;
+
+            // await takeScreenshot({ path: `./public/${camName}_depth.png` });
+
+            // downloadBase64Image(
+            //   "png",
+            //   screenshotData,
+            //   camera.name + "_depth" + ".png"
+            // );
+
+            await delay(100);
+
+            depthPostProcess.dispose();
+
+            camera.minZ = originalMinZ;
+            camera.maxZ = originalMaxZ;
+          }
+          console.log("after camNames");
+
+          return cameraRendersByName;
         }
-      }
 
-      // ----------------------------------
-      // Converting HDR to Env
-      // ----------------------------------
+        async function handleGltfModel() {
+          if (gltfFilesData.detailModel) {
+            console.log("---------------------");
+            console.log("camera file");
+            const modelFile = await loadModelFile({
+              modelBase64: gltfFilesData.detailModel,
+              scene: scene,
+            });
 
-      async function waitForSceneReady() {
-        return new Promise(async (resolve, reject) => {
-          scene?.executeWhenReady(() => {
-            resolve(null);
+            window.pageRefs.modelFile = modelFile;
+
+            console.log("modelFile");
+            console.log(modelFile);
+
+            console.log("modelFile.transformNodes");
+            console.log(modelFile?.transformNodes);
+
+            const cameraRendersByName = await renderPics({
+              scene,
+              engine,
+              modelFile,
+            });
+
+            console.log("cameraRendersByName");
+            console.log(cameraRendersByName);
+            if (modelFile) {
+              const camNames = Object.keys(modelFile.cameras);
+              return { camNames };
+            }
+          }
+          return { camNames: [] };
+        }
+
+        // ----------------------------------
+        // Converting HDR to Env
+        // ----------------------------------
+
+        async function waitForSceneReady() {
+          return new Promise(async (resolve, reject) => {
+            scene?.executeWhenReady(() => {
+              resolve(null);
+            });
           });
-        });
-      }
-      async function getBlobAsBinaryString(
-        theBlob: Blob
-      ): Promise<string | ArrayBuffer | null> {
-        return new Promise(async (resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsBinaryString(theBlob);
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = () =>
-            reject("Error occurred while reading binary string");
-        });
-      }
-      async function getEnvFileBinaryStringFromHdrString(hdrString: string) {
-        const environment = new BABYLON.HDRCubeTexture(
-          hdrString,
-          scene,
-          probeResolution,
-          false,
-          true,
-          false,
-          true
-        );
-        await waitForSceneReady();
-        const arrayBuffer =
-          await BABYLON.EnvironmentTextureTools.CreateEnvTextureAsync(
-            environment
+        }
+        async function getBlobAsBinaryString(
+          theBlob: Blob
+        ): Promise<string | ArrayBuffer | null> {
+          return new Promise(async (resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsBinaryString(theBlob);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () =>
+              reject("Error occurred while reading binary string");
+          });
+        }
+        async function getEnvFileBinaryStringFromHdrString(hdrString: string) {
+          const environment = new BABYLON.HDRCubeTexture(
+            hdrString,
+            scene,
+            probeResolution,
+            false,
+            true,
+            false,
+            true
           );
-        var blob = new Blob([arrayBuffer], { type: "octet/stream" });
-        const binaryFileResult = await getBlobAsBinaryString(blob);
-        environment.dispose();
-        return binaryFileResult;
+          await waitForSceneReady();
+          const arrayBuffer =
+            await BABYLON.EnvironmentTextureTools.CreateEnvTextureAsync(
+              environment
+            );
+          var blob = new Blob([arrayBuffer], { type: "octet/stream" });
+          const binaryFileResult = await getBlobAsBinaryString(blob);
+          environment.dispose();
+          return binaryFileResult;
+        }
+
+        async function getEnvFileDataFromHdrFileData(
+          hdrDataItem: HDRFileProbeData
+        ) {
+          const newData = await getEnvFileBinaryStringFromHdrString(
+            hdrDataItem.data
+          );
+          return {
+            data: newData,
+            name: hdrDataItem.name.replace(".hdr", ".env"),
+          };
+        }
+
+        await waitForSceneReady();
+
+        const { camNames } = await handleGltfModel();
+
+        for (const hdrFileData of hdrFilesData) {
+          const envFileData = await getEnvFileDataFromHdrFileData(hdrFileData);
+          envFilesData.push(envFileData);
+        }
+
+        // load gltf files here (from base64?)
+        // gltfFilesData
+
+        return { envFilesData, camNames };
+      },
+      hdrFilesData,
+      probeResolution,
+      gltfFilesData
+    )) ?? {};
+
+  console.log("------------");
+  console.log("camNames");
+  console.log(camNames);
+
+  await page.screenshot({ path: `./${"testCam"}.png`, fullPage: true });
+
+  await delay(3000);
+
+  async function getCameraColorScreenshot(camName: string) {
+    // use this whole function inside evaluate
+
+    window.pageRefs.depthPostProcess?.dispose();
+
+    const { modelFile, delay, engine, scene } = window.pageRefs;
+    if (!delay || !modelFile || !engine || !scene) return;
+    const camera = modelFile.cameras[camName];
+    if (!camera) return;
+
+    engine.setSize(1920, 1080);
+
+    camera.minZ = 0.1;
+    camera.maxZ = 10000;
+    scene.activeCamera = camera;
+
+    scene.render();
+    console.log("before first delay");
+
+    await delay(100);
+    console.log("after first delay");
+
+    function makeScreenShotAsync(
+      engine: BABYLON.Engine,
+      camera: BABYLON.Camera
+    ) {
+      return new Promise<string | undefined>((resolve, reject) => {
+        if (camera) {
+          BABYLON.CreateScreenshotUsingRenderTarget(
+            engine,
+            camera,
+            { width: 1920, height: 1080 },
+            (result) => {
+              resolve(result);
+            }
+          );
+        } else {
+          resolve(undefined);
+        }
+      });
+    }
+
+    // const colorScreenshotData =
+    //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
+    //     engine,
+    //     scene?.activeCamera,
+    //     { width: 1920, height: 1080 }
+    //   );
+
+    console.log("after screenshot");
+  }
+
+  async function getCameraDepthScreenshot(camName: string) {
+    // use this whole function inside evaluate
+
+    const { modelFile, delay, engine, scene } = window.pageRefs;
+    if (!delay || !modelFile || !engine || !scene) {
+      console.log("MISSING STUFF");
+      console.log({
+        delay: !!delay,
+        modelFile: !!modelFile,
+        engine: !!engine,
+        scene: !!scene,
+      });
+      await delay?.(5000);
+      return;
+    }
+    const camera = modelFile.cameras[camName];
+    if (!camera) return;
+
+    let depthRenderer: null | BABYLON.DepthRenderer = null;
+
+    console.log("got to here 3", camName);
+    camera.computeWorldMatrix();
+    const cameraDepthFarPoint =
+      modelFile.transformNodes[camName + "_depth_far"] ??
+      modelFile.transformNodes[camName + "_depth"];
+    const cameraDepthNearPoint =
+      modelFile.transformNodes[camName + "_depth_near"];
+
+    if (cameraDepthFarPoint) cameraDepthFarPoint.computeWorldMatrix();
+    if (cameraDepthNearPoint) cameraDepthNearPoint.computeWorldMatrix();
+
+    const originalMinZ = camera.minZ;
+    const originalMaxZ = camera.maxZ;
+
+    const depthMinZ = cameraDepthNearPoint
+      ? BABYLON.Vector3.Distance(
+          camera.globalPosition,
+          cameraDepthNearPoint.absolutePosition
+        )
+      : 1;
+
+    const depthMaxZ = cameraDepthFarPoint
+      ? BABYLON.Vector3.Distance(
+          camera.globalPosition,
+          cameraDepthFarPoint.absolutePosition
+        )
+      : 100;
+
+    engine.setSize(1920, 1080);
+
+    camera.minZ = 0.1;
+    camera.maxZ = 10000;
+    scene.activeCamera = camera;
+
+    scene.render();
+    console.log("before first delay");
+
+    await delay(100);
+    console.log("after first delay");
+
+    // const colorScreenshotData =
+    //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
+    //     engine,
+    //     scene?.activeCamera,
+    //     { width: 1920, height: 1080 }
+    //   );
+
+    console.log("after screenshot");
+
+    // cameraRendersByName[camName].colorPic = colorScreenshotData;
+    // downloadBase64Image("png", screenshotData, camera.name + ".png");
+
+    await delay(100);
+    console.log("after storic color pic");
+    camera.minZ = depthMinZ;
+    camera.maxZ = depthMaxZ;
+
+    scene.enableDepthRenderer;
+    depthRenderer = scene.enableDepthRenderer(camera, false);
+
+    // refs.scene?.setActiveCameraByName(camera.name);
+    scene.activeCamera = camera;
+
+    console.log("before depth post process");
+    window.pageRefs.depthPostProcess = new BABYLON.PostProcess(
+      "viewDepthShader",
+      "viewDepth",
+      [],
+      ["textureSampler", "SceneDepthTexture"], // textures
+      { width: 1920, height: 1080 },
+      camera,
+      // globalRefs.activeCamera
+      // Texture.NEAREST_SAMPLINGMODE // sampling
+      // globalRefs.scene.engine // engine,
+      // Texture.BILINEAR_SAMPLINGMODE,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "viewDepth"
+    );
+    const depthRenderTarget = depthRenderer?.getDepthMap();
+
+    if (depthRenderTarget) {
+      depthRenderTarget.activeCamera = camera;
+    }
+    window.pageRefs.depthPostProcess.onApply = (effect) => {
+      if (depthRenderTarget) {
+        effect?.setTexture("SceneDepthTexture", depthRenderTarget);
       }
+    };
 
-      async function getEnvFileDataFromHdrFileData(
-        hdrDataItem: HDRFileProbeData
-      ) {
-        const newData = await getEnvFileBinaryStringFromHdrString(
-          hdrDataItem.data
-        );
-        return {
-          data: newData,
-          name: hdrDataItem.name.replace(".hdr", ".env"),
-        };
-      }
+    console.log("before render");
 
-      await waitForSceneReady();
+    scene.render();
+    await delay(100);
+    console.log("before depth screenshot");
 
-      await handleGltfModel();
+    await delay(100);
 
-      for (const hdrFileData of hdrFilesData) {
-        const envFileData = await getEnvFileDataFromHdrFileData(hdrFileData);
-        envFilesData.push(envFileData);
-      }
+    camera.minZ = originalMinZ;
+    camera.maxZ = originalMaxZ;
+  }
 
-      // load gltf files here (from base64?)
-      // gltfFilesData
+  for (const camName of camNames ?? []) {
+    await page.evaluate(getCameraColorScreenshot, camName);
 
-      return envFilesData;
-    },
-    hdrFilesData,
-    probeResolution,
-    gltfFilesData
-  );
+    await page.screenshot({ path: `./${camName}.png`, fullPage: true });
+
+    await page.evaluate(getCameraDepthScreenshot, camName);
+    await page.screenshot({ path: `./${camName}_depth.png`, fullPage: true });
+  }
+  const something = await page.evaluate(async () => {
+    // const pageRefs = {
+    //   exampleText: null as null | string,
+    // };
+    const pageRefs = window.pageRefs;
+    const { delay } = window.pageRefs;
+
+    if (!delay) return;
+
+    await delay(1000);
+    console.log("pageRefs.exampleText");
+    await delay(1000);
+    console.log(pageRefs.exampleText);
+  });
 
   async function writeEnvFileDataToFile(envDataItem: EnvFileData) {
     const envFilePath = path.join(folderPath, envDataItem.name);
@@ -740,11 +1026,11 @@ function splitFilePath(fullPathOriginal: string) {
     }
   }
 
-  await Promise.all(
-    envFilesData.map((envFileData) => writeEnvFileDataToFile(envFileData))
-  );
-
-  await page.screenshot({ path: `./${"testCam"}.png`, fullPage: true });
+  if (envFilesData) {
+    await Promise.all(
+      envFilesData.map((envFileData) => writeEnvFileDataToFile(envFileData))
+    );
+  }
 
   // close the browser
   await browser.close();

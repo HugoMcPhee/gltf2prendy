@@ -32,6 +32,7 @@ const puppeteer_1 = __importDefault(require("puppeteer"));
 // import chromePaths from "chrome-paths";
 const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
+const delay_1 = __importDefault(require("delay"));
 function splitFilePath(fullPathOriginal) {
     const fullPath = fullPathOriginal.replaceAll("\\", "/");
     const lastSeparatorIndex = fullPath.lastIndexOf("/");
@@ -58,6 +59,7 @@ function splitFilePath(fullPathOriginal) {
     // type HDRFileProbeData = { name: "probe.hdr" , data: base64String}
     const hdrFilesData = [];
     const gltfFilesData = {};
+    // let camNames = [] as string[]; // use evaluate to get camNames
     const HDRMimeType = "image/vnd.radiance";
     const prefixForHDRDataUrl = `data:${HDRMimeType};base64,`;
     const gltfMimeType = "model/gltf-binary";
@@ -143,31 +145,10 @@ function splitFilePath(fullPathOriginal) {
     //   console.log(`logging something to console`);
     //   console.log(thing);
     // }
-    const envFilesData = await page.evaluate(async (hdrFilesData, probeResolution, gltfFilesData) => {
+    // declare var pageRefs: typeof pageRefsType;
+    const { envFilesData, camNames } = (await page.evaluate(async (hdrFilesData, probeResolution, gltfFilesData) => {
         // type EnvFileData = { name: "probe.hdr" , data: binaryString}
         const envFilesData = [];
-        // ----------------------------------
-        // Setting up a babylonjs scene
-        // ----------------------------------
-        var canvas = document.createElement("canvas");
-        canvas.id = "renderCanvas";
-        canvas.width = 1920;
-        canvas.height = 1080;
-        document.body.appendChild(canvas);
-        // logSomethingToConsole("hello");
-        var engine = new BABYLON.Engine(canvas, true, {
-            preserveDrawingBuffer: true,
-            stencil: true,
-            premultipliedAlpha: false,
-        });
-        var scene = new BABYLON.Scene(engine);
-        // logSomethingToConsole(scene);
-        var camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 5, -10), scene);
-        const mainLight = new BABYLON.HemisphericLight("light1", BABYLON.Vector3.Up(), scene);
-        mainLight.intensity = 0.7;
-        camera.setTarget(BABYLON.Vector3.Zero());
-        camera.attachControl(canvas, true);
-        engine.setSize(1920, 1080);
         // ----------------------------------
         // From chootils
         // TODO (import in node and transfer to pupeteer page?)
@@ -198,14 +179,49 @@ function splitFilePath(fullPathOriginal) {
             }
             return newObject;
         }
+        window.pageRefs = {
+            delay: async (time) => {
+                return new Promise((resolve, reject) => {
+                    setTimeout(resolve, time);
+                });
+            },
+            forEach,
+            keyBy,
+        };
+        const pageRefs = window.pageRefs;
+        pageRefs.exampleText = "hello";
+        console.log("pageRefs.exampleText");
+        console.log(pageRefs.exampleText);
+        const { delay } = window.pageRefs;
+        if (!delay)
+            return;
+        // ----------------------------------
+        // Setting up a babylonjs scene
+        // ----------------------------------
+        var canvas = document.createElement("canvas");
+        canvas.id = "renderCanvas";
+        canvas.width = 1920;
+        canvas.height = 1080;
+        document.body.appendChild(canvas);
+        // logSomethingToConsole("hello");
+        var engine = new BABYLON.Engine(canvas, true, {
+            preserveDrawingBuffer: true,
+            stencil: true,
+            premultipliedAlpha: false,
+        });
+        pageRefs.engine = engine;
+        var scene = new BABYLON.Scene(engine);
+        pageRefs.scene = scene;
+        // logSomethingToConsole(scene);
+        var camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 5, -10), scene);
+        const mainLight = new BABYLON.HemisphericLight("light1", BABYLON.Vector3.Up(), scene);
+        mainLight.intensity = 0.7;
+        camera.setTarget(BABYLON.Vector3.Zero());
+        camera.attachControl(canvas, true);
+        engine.setSize(1920, 1080);
         // ----------------------------------
         // Other helpers
         // ----------------------------------
-        async function delay(time) {
-            return new Promise((resolve, reject) => {
-                setTimeout(resolve, time);
-            });
-        }
         // ----------------------------------
         // Rendering GTLF file pics
         // ----------------------------------
@@ -224,7 +240,9 @@ function splitFilePath(fullPathOriginal) {
             const blob = new Blob([byteArray], {
                 type: "application/octet-stream",
             });
-            return new File([blob], fileName, { type: "application/octet-stream" });
+            return new File([blob], fileName, {
+                type: "application/octet-stream",
+            });
         }
         async function loadModelFile({ modelBase64, scene, }) {
             if (!scene)
@@ -276,16 +294,16 @@ function splitFilePath(fullPathOriginal) {
             };
         }
         /*
-  
-           #ifdef GL_ES
-              precision mediump float;
-            #endif
-        
-            // #ifdef LOGARITHMICDEPTH
-            //   gl_FragDepthEXT = log2(vFragmentDepth) * logarithmicDepthConstant * 0.5;
-            // #endif
-  
-        */
+
+         #ifdef GL_ES
+            precision mediump float;
+          #endif
+      
+          // #ifdef LOGARITHMICDEPTH
+          //   gl_FragDepthEXT = log2(vFragmentDepth) * logarithmicDepthConstant * 0.5;
+          // #endif
+
+      */
         const shaders = {
             viewDepth: {
                 fragment: `
@@ -369,6 +387,8 @@ function splitFilePath(fullPathOriginal) {
             console.log("got to here 2");
             console.log(camNames);
             for (const camName of camNames) {
+                if (!delay)
+                    return;
                 const camera = modelFile.cameras[camName];
                 cameraRendersByName[camName] = {};
                 console.log("got to here 3", camName);
@@ -396,7 +416,7 @@ function splitFilePath(fullPathOriginal) {
                 scene.activeCamera = camera;
                 scene.render();
                 console.log("before first delay");
-                await delay(250);
+                await delay(100);
                 console.log("after first delay");
                 function makeScreenShotAsync(engine, camera) {
                     return new Promise((resolve, reject) => {
@@ -419,7 +439,7 @@ function splitFilePath(fullPathOriginal) {
                 console.log("after screenshot");
                 // cameraRendersByName[camName].colorPic = colorScreenshotData;
                 // downloadBase64Image("png", screenshotData, camera.name + ".png");
-                await delay(250);
+                await delay(100);
                 console.log("after storic color pic");
                 camera.minZ = depthMinZ;
                 camera.maxZ = depthMaxZ;
@@ -446,7 +466,7 @@ function splitFilePath(fullPathOriginal) {
                 };
                 console.log("before render");
                 scene.render();
-                await delay(250);
+                await delay(100);
                 console.log("before depth screenshot");
                 // const depthScreenshotData =
                 //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
@@ -472,8 +492,8 @@ function splitFilePath(fullPathOriginal) {
                 //   screenshotData,
                 //   camera.name + "_depth" + ".png"
                 // );
-                await delay(250);
-                // depthPostProcess.dispose();
+                await delay(100);
+                depthPostProcess.dispose();
                 camera.minZ = originalMinZ;
                 camera.maxZ = originalMaxZ;
             }
@@ -488,6 +508,7 @@ function splitFilePath(fullPathOriginal) {
                     modelBase64: gltfFilesData.detailModel,
                     scene: scene,
                 });
+                window.pageRefs.modelFile = modelFile;
                 console.log("modelFile");
                 console.log(modelFile);
                 console.log("modelFile.transformNodes");
@@ -499,7 +520,12 @@ function splitFilePath(fullPathOriginal) {
                 });
                 console.log("cameraRendersByName");
                 console.log(cameraRendersByName);
+                if (modelFile) {
+                    const camNames = Object.keys(modelFile.cameras);
+                    return { camNames };
+                }
             }
+            return { camNames: [] };
         }
         // ----------------------------------
         // Converting HDR to Env
@@ -536,15 +562,168 @@ function splitFilePath(fullPathOriginal) {
             };
         }
         await waitForSceneReady();
-        await handleGltfModel();
+        const { camNames } = await handleGltfModel();
         for (const hdrFileData of hdrFilesData) {
             const envFileData = await getEnvFileDataFromHdrFileData(hdrFileData);
             envFilesData.push(envFileData);
         }
         // load gltf files here (from base64?)
         // gltfFilesData
-        return envFilesData;
-    }, hdrFilesData, probeResolution, gltfFilesData);
+        return { envFilesData, camNames };
+    }, hdrFilesData, probeResolution, gltfFilesData)) ?? {};
+    console.log("------------");
+    console.log("camNames");
+    console.log(camNames);
+    await page.screenshot({ path: `./${"testCam"}.png`, fullPage: true });
+    await (0, delay_1.default)(3000);
+    async function getCameraColorScreenshot(camName) {
+        // use this whole function inside evaluate
+        window.pageRefs.depthPostProcess?.dispose();
+        const { modelFile, delay, engine, scene } = window.pageRefs;
+        if (!delay || !modelFile || !engine || !scene)
+            return;
+        const camera = modelFile.cameras[camName];
+        if (!camera)
+            return;
+        engine.setSize(1920, 1080);
+        camera.minZ = 0.1;
+        camera.maxZ = 10000;
+        scene.activeCamera = camera;
+        // TODO keep a reference so it doesn't get re-created
+        // const mainLight = new BABYLON.HemisphericLight(
+        //   "light1",
+        //   BABYLON.Vector3.Up(),
+        //   scene
+        // );
+        // mainLight.intensity = 0.7;
+        scene.render();
+        console.log("before first delay");
+        await delay(100);
+        console.log("after first delay");
+        function makeScreenShotAsync(engine, camera) {
+            return new Promise((resolve, reject) => {
+                if (camera) {
+                    BABYLON.CreateScreenshotUsingRenderTarget(engine, camera, { width: 1920, height: 1080 }, (result) => {
+                        resolve(result);
+                    });
+                }
+                else {
+                    resolve(undefined);
+                }
+            });
+        }
+        // const colorScreenshotData =
+        //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
+        //     engine,
+        //     scene?.activeCamera,
+        //     { width: 1920, height: 1080 }
+        //   );
+        console.log("after screenshot");
+    }
+    async function getCameraDepthScreenshot(camName) {
+        // use this whole function inside evaluate
+        const { modelFile, delay, engine, scene } = window.pageRefs;
+        if (!delay || !modelFile || !engine || !scene) {
+            console.log("MISSING STUFF");
+            console.log({
+                delay: !!delay,
+                modelFile: !!modelFile,
+                engine: !!engine,
+                scene: !!scene,
+            });
+            await delay?.(5000);
+            return;
+        }
+        const camera = modelFile.cameras[camName];
+        if (!camera)
+            return;
+        let depthRenderer = null;
+        console.log("got to here 3", camName);
+        camera.computeWorldMatrix();
+        const cameraDepthFarPoint = modelFile.transformNodes[camName + "_depth_far"] ??
+            modelFile.transformNodes[camName + "_depth"];
+        const cameraDepthNearPoint = modelFile.transformNodes[camName + "_depth_near"];
+        if (cameraDepthFarPoint)
+            cameraDepthFarPoint.computeWorldMatrix();
+        if (cameraDepthNearPoint)
+            cameraDepthNearPoint.computeWorldMatrix();
+        const originalMinZ = camera.minZ;
+        const originalMaxZ = camera.maxZ;
+        const depthMinZ = cameraDepthNearPoint
+            ? BABYLON.Vector3.Distance(camera.globalPosition, cameraDepthNearPoint.absolutePosition)
+            : 1;
+        const depthMaxZ = cameraDepthFarPoint
+            ? BABYLON.Vector3.Distance(camera.globalPosition, cameraDepthFarPoint.absolutePosition)
+            : 100;
+        engine.setSize(1920, 1080);
+        camera.minZ = 0.1;
+        camera.maxZ = 10000;
+        scene.activeCamera = camera;
+        scene.render();
+        console.log("before first delay");
+        await delay(100);
+        console.log("after first delay");
+        // const colorScreenshotData =
+        //   await BABYLON.CreateScreenshotUsingRenderTargetAsync(
+        //     engine,
+        //     scene?.activeCamera,
+        //     { width: 1920, height: 1080 }
+        //   );
+        console.log("after screenshot");
+        // cameraRendersByName[camName].colorPic = colorScreenshotData;
+        // downloadBase64Image("png", screenshotData, camera.name + ".png");
+        await delay(100);
+        console.log("after storic color pic");
+        camera.minZ = depthMinZ;
+        camera.maxZ = depthMaxZ;
+        scene.enableDepthRenderer;
+        depthRenderer = scene.enableDepthRenderer(camera, false);
+        // refs.scene?.setActiveCameraByName(camera.name);
+        scene.activeCamera = camera;
+        console.log("before depth post process");
+        window.pageRefs.depthPostProcess = new BABYLON.PostProcess("viewDepthShader", "viewDepth", [], ["textureSampler", "SceneDepthTexture"], // textures
+        { width: 1920, height: 1080 }, camera, 
+        // globalRefs.activeCamera
+        // Texture.NEAREST_SAMPLINGMODE // sampling
+        // globalRefs.scene.engine // engine,
+        // Texture.BILINEAR_SAMPLINGMODE,
+        undefined, undefined, undefined, undefined, undefined, "viewDepth");
+        const depthRenderTarget = depthRenderer?.getDepthMap();
+        if (depthRenderTarget) {
+            depthRenderTarget.activeCamera = camera;
+        }
+        window.pageRefs.depthPostProcess.onApply = (effect) => {
+            if (depthRenderTarget) {
+                effect?.setTexture("SceneDepthTexture", depthRenderTarget);
+            }
+        };
+        console.log("before render");
+        scene.render();
+        await delay(100);
+        console.log("before depth screenshot");
+        await delay(100);
+        camera.minZ = originalMinZ;
+        camera.maxZ = originalMaxZ;
+    }
+    for (const camName of camNames ?? []) {
+        await page.evaluate(getCameraColorScreenshot, camName);
+        await page.screenshot({ path: `./${camName}.png`, fullPage: true });
+        await page.evaluate(getCameraDepthScreenshot, camName);
+        await page.screenshot({ path: `./${camName}_depth.png`, fullPage: true });
+    }
+    const something = await page.evaluate(async () => {
+        // const pageRefs = {
+        //   exampleText: null as null | string,
+        // };
+        const pageRefs = window.pageRefs;
+        const { delay } = window.pageRefs;
+        if (!delay)
+            return;
+        await delay(1000);
+        console.log("pageRefs.exampleText");
+        await delay(1000);
+        console.log(pageRefs.exampleText);
+    });
     async function writeEnvFileDataToFile(envDataItem) {
         const envFilePath = path_1.default.join(folderPath, envDataItem.name);
         const envData = envDataItem.data;
@@ -553,8 +732,9 @@ function splitFilePath(fullPathOriginal) {
             await promises_1.default.writeFile(envFilePath, nodeFile, "binary");
         }
     }
-    await Promise.all(envFilesData.map((envFileData) => writeEnvFileDataToFile(envFileData)));
-    await page.screenshot({ path: `./${"testCam"}.png`, fullPage: true });
+    if (envFilesData) {
+        await Promise.all(envFilesData.map((envFileData) => writeEnvFileDataToFile(envFileData)));
+    }
     // close the browser
     await browser.close();
 })();
