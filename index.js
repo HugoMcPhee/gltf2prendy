@@ -66,6 +66,13 @@ function splitFilePath(fullPathOriginal) {
     let placeDetailGlbPath = "";
     const placeName = splitFilePath(folderPath).filename;
     console.log("placeName", placeName);
+    const placeInfo = {
+        camNames: [],
+        floorNames: [],
+        pointNames: [],
+        triggerNames: [],
+        wallNames: [],
+    };
     // checks a file or folder and saves the HDR data if it's a HDR file
     async function checkDirectoryItem(fileName) {
         const filePath = path_1.default.join(folderPath, fileName);
@@ -118,10 +125,15 @@ function splitFilePath(fullPathOriginal) {
         const nodeParent = transformNode.getParentNode();
         const isARootNode = !nodeParent;
         if (isARootNode) {
-            console.log(nodeName);
             const nodeChildren = transformNode.listChildren();
             console.log(nodeName, nodeChildren.length);
             if (nodeName === "cameras") {
+                for (const camNodeChild of nodeChildren) {
+                    const camName = camNodeChild.getName();
+                    placeInfo.camNames.push(camName);
+                    // console.log(camNodeChild.getName());
+                    // console.log(camNodeChild.listChildren());
+                }
             }
         }
         // Could check if the node name is walls etc, but ideally check the root children instead
@@ -406,6 +418,8 @@ function splitFilePath(fullPathOriginal) {
     }, gltfFilesData)) ?? {};
     console.log("camNames");
     console.log(camNames);
+    console.log("placeInfo.camNames");
+    console.log(placeInfo.camNames);
     async function getCameraColorScreenshot(camName) {
         // use this whole function inside evaluate
         // remove the old depth postProcess
@@ -487,7 +501,7 @@ function splitFilePath(fullPathOriginal) {
         camera.maxZ = originalMaxZ;
     }
     // Get color and depth renders for all cameras
-    for (const camName of camNames ?? []) {
+    for (const camName of placeInfo.camNames ?? []) {
         await page.evaluate(getCameraColorScreenshot, camName);
         await page.screenshot({ path: `./${camName}.png`, fullPage: true });
         await page.evaluate(getCameraDepthScreenshot, camName);

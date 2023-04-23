@@ -109,6 +109,14 @@ function splitFilePath(fullPathOriginal: string) {
   const placeName = splitFilePath(folderPath).filename;
   console.log("placeName", placeName);
 
+  const placeInfo: PlaceInfo = {
+    camNames: [],
+    floorNames: [],
+    pointNames: [],
+    triggerNames: [],
+    wallNames: [],
+  };
+
   // checks a file or folder and saves the HDR data if it's a HDR file
   async function checkDirectoryItem(fileName: string) {
     const filePath = path.join(folderPath, fileName);
@@ -177,6 +185,12 @@ function splitFilePath(fullPathOriginal: string) {
       console.log(nodeName, nodeChildren.length);
 
       if (nodeName === "cameras") {
+        for (const camNodeChild of nodeChildren) {
+          const camName = camNodeChild.getName();
+          placeInfo.camNames.push(camName);
+          // console.log(camNodeChild.getName());
+          // console.log(camNodeChild.listChildren());
+        }
       }
     }
 
@@ -570,6 +584,8 @@ function splitFilePath(fullPathOriginal: string) {
 
   console.log("camNames");
   console.log(camNames);
+  console.log("placeInfo.camNames");
+  console.log(placeInfo.camNames);
 
   async function getCameraColorScreenshot(camName: string) {
     // use this whole function inside evaluate
@@ -692,7 +708,7 @@ function splitFilePath(fullPathOriginal: string) {
   }
 
   // Get color and depth renders for all cameras
-  for (const camName of camNames ?? []) {
+  for (const camName of placeInfo.camNames ?? []) {
     await page.evaluate(getCameraColorScreenshot, camName);
     await page.screenshot({ path: `./${camName}.png`, fullPage: true });
 
