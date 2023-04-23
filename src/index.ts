@@ -54,7 +54,7 @@ declare global {
 type PlaceInfo = {
   camNames: string[];
   triggerNames: string[];
-  pointNames: string[];
+  spotNames: string[];
   wallNames: string[];
   floorNames: string[];
   // might need extra info about cams etc
@@ -112,7 +112,7 @@ function splitFilePath(fullPathOriginal: string) {
   const placeInfo: PlaceInfo = {
     camNames: [],
     floorNames: [],
-    pointNames: [],
+    spotNames: [],
     triggerNames: [],
     wallNames: [],
   };
@@ -190,6 +190,22 @@ function splitFilePath(fullPathOriginal: string) {
           placeInfo.camNames.push(camName);
           // console.log(camNodeChild.getName());
           // console.log(camNodeChild.listChildren());
+        }
+      } else if (nodeName === "walls") {
+        for (const camNodeChild of nodeChildren) {
+          placeInfo.wallNames.push(camNodeChild.getName());
+        }
+      } else if (nodeName === "triggers") {
+        for (const camNodeChild of nodeChildren) {
+          placeInfo.triggerNames.push(camNodeChild.getName());
+        }
+      } else if (nodeName === "spots") {
+        for (const camNodeChild of nodeChildren) {
+          placeInfo.spotNames.push(camNodeChild.getName());
+        }
+      } else if (nodeName === "floors") {
+        for (const camNodeChild of nodeChildren) {
+          placeInfo.floorNames.push(camNodeChild.getName());
         }
       }
     }
@@ -586,6 +602,8 @@ function splitFilePath(fullPathOriginal: string) {
   console.log(camNames);
   console.log("placeInfo.camNames");
   console.log(placeInfo.camNames);
+  console.log("placeInfo");
+  console.log(placeInfo);
 
   async function getCameraColorScreenshot(camName: string) {
     // use this whole function inside evaluate
