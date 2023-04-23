@@ -10,6 +10,7 @@ import fs from "fs/promises";
 import path, { resolve } from "path";
 import { log } from "console";
 import delay from "delay";
+import { NodeIO } from "@gltf-transform/core";
 // import delayNode from "delay";
 
 type ModelFile = {
@@ -49,6 +50,15 @@ declare global {
     pageRefs: PageRefs;
   }
 }
+
+type PlaceInfo = {
+  camNames: string[];
+  triggerNames: string[];
+  pointNames: string[];
+  wallNames: string[];
+  floorNames: string[];
+  // might need extra info about cams etc
+};
 
 type HDRFileProbeData = { name: string; data: string };
 type EnvFileData = { name: string; data: string | ArrayBuffer | null };
@@ -93,6 +103,9 @@ function splitFilePath(fullPathOriginal: string) {
   const gltfMimeType = "model/gltf-binary";
   const prefixForGltfDataUrl = `data:${gltfMimeType};base64,`;
 
+  let placeDetailGlbFile = null as null | Uint8Array;
+  let placeDetailGlbPath = "";
+
   const placeName = splitFilePath(folderPath).filename;
   console.log("placeName", placeName);
 
@@ -121,6 +134,8 @@ function splitFilePath(fullPathOriginal: string) {
       const isPlaceGameFile = fileName === placeName + ".glb";
       const isPlaceDetailFile = fileName === placeName + "_detail.glb";
 
+      if (isPlaceDetailFile) placeDetailGlbPath = filePath;
+
       if (isPlaceGameFile || isPlaceDetailFile) {
         const fileDataUrl = await fs.readFile(filePath, { encoding: "base64" });
         const dataUrlWithMimeType = prefixForGltfDataUrl + fileDataUrl;
@@ -135,6 +150,38 @@ function splitFilePath(fullPathOriginal: string) {
 
   const files = await fs.readdir(folderPath);
   await Promise.all(files.map((fileName) => checkDirectoryItem(fileName)));
+
+  // ------------------------------------------------
+  // Read Gltf data
+  // ------------------------------------------------
+
+  // Get place info, like triggerNames, spotNames, camNames etc
+  // read glft file
+
+  const io = new NodeIO();
+
+  // Read.
+  let document = await io.read("placeDetailGlbPath"); // → Document
+  // document = await io.readBinary(placeDetailGlbFile); // Uint8Array → Document
+
+  // get the cam names, trigger names, point names wall names and everything else needed from here
+  // NOTE maybe try to save the best lighting frame etc inside gltf custom properties or use a default
+
+  // Edit
+  // find the details node and delete it
+
+  // find the cameras, and remove the extra wrapping node for each one
+
+  // udpate the cameras min and maxZ based on the distances (NOTE may need to to this later from babylonjs! and return the values)
+
+  // Write. // NOTE move this to below the babylonjs parts
+  // NOTE won't work is _detail is writtern somewhere else, it might be better to build the new path from the placename
+  await io.write(placeDetailGlbPath?.replace("_detail", ""), document); // → void
+  const newGlb = await io.writeBinary(document); // Document → Uint8Array
+
+  // ------------------------------------------------
+  // Render pics in babylonjs
+  // ------------------------------------------------
 
   // Reccomended pupeteer args by babylonjs, not used yet
   // Don't disable the gpu
@@ -633,10 +680,9 @@ function splitFilePath(fullPathOriginal: string) {
     await page.screenshot({ path: `./${camName}_depth.png`, fullPage: true });
   }
 
-  // Get place info, like triggerNames, spotNames, camNames etc
-  // await page.evaluate(async () => {
-  //   const pageRefs = window.pageRefs;
-  // });
+  // ------------------------------------------------
+  // Create videos from pic renders
+  // ------------------------------------------------
 
   async function writeEnvFileDataToFile(envDataItem: EnvFileData) {
     const envFilePath = path.join(folderPath, envDataItem.name);
