@@ -161,8 +161,28 @@ function splitFilePath(fullPathOriginal: string) {
   const io = new NodeIO();
 
   // Read.
-  let document = await io.read("placeDetailGlbPath"); // → Document
+  let gltfDocument = await io.read(placeDetailGlbPath); // → Document
   // document = await io.readBinary(placeDetailGlbFile); // Uint8Array → Document
+  console.log("gltfDocument.getRoot().listNodes()");
+  const placeRoot = gltfDocument.getRoot();
+  const transformNodes = placeRoot.listNodes();
+
+  for (const transformNode of transformNodes) {
+    const nodeName = transformNode.getName();
+    const nodeParent = transformNode.getParentNode();
+    const isARootNode = !nodeParent;
+
+    if (isARootNode) {
+      const nodeChildren = transformNode.listChildren();
+      console.log(nodeName, nodeChildren.length);
+
+      if (nodeName === "cameras") {
+      }
+    }
+
+    // Could check if the node name is walls etc, but ideally check the root children instead
+  }
+  // console.log(gltfDocument.getRoot().listNodes());
 
   // get the cam names, trigger names, point names wall names and everything else needed from here
   // NOTE maybe try to save the best lighting frame etc inside gltf custom properties or use a default
@@ -176,8 +196,8 @@ function splitFilePath(fullPathOriginal: string) {
 
   // Write. // NOTE move this to below the babylonjs parts
   // NOTE won't work is _detail is writtern somewhere else, it might be better to build the new path from the placename
-  await io.write(placeDetailGlbPath?.replace("_detail", ""), document); // → void
-  const newGlb = await io.writeBinary(document); // Document → Uint8Array
+  // await io.write(placeDetailGlbPath?.replace("_detail", ""), gltfDocument); // → void
+  // const newGlb = await io.writeBinary(gltfDocument); // Document → Uint8Array
 
   // ------------------------------------------------
   // Render pics in babylonjs

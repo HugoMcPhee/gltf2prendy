@@ -32,6 +32,7 @@ const puppeteer_1 = __importDefault(require("puppeteer"));
 // import chromePaths from "chrome-paths";
 const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
+const core_1 = require("@gltf-transform/core");
 function splitFilePath(fullPathOriginal) {
     const fullPath = fullPathOriginal.replaceAll("\\", "/");
     const lastSeparatorIndex = fullPath.lastIndexOf("/");
@@ -61,6 +62,8 @@ function splitFilePath(fullPathOriginal) {
     const prefixForHDRDataUrl = `data:${HDRMimeType};base64,`;
     const gltfMimeType = "model/gltf-binary";
     const prefixForGltfDataUrl = `data:${gltfMimeType};base64,`;
+    let placeDetailGlbFile = null;
+    let placeDetailGlbPath = "";
     const placeName = splitFilePath(folderPath).filename;
     console.log("placeName", placeName);
     // checks a file or folder and saves the HDR data if it's a HDR file
@@ -83,6 +86,8 @@ function splitFilePath(fullPathOriginal) {
             // if the filename matches placeName.glb or placeName_detail.glb
             const isPlaceGameFile = fileName === placeName + ".glb";
             const isPlaceDetailFile = fileName === placeName + "_detail.glb";
+            if (isPlaceDetailFile)
+                placeDetailGlbPath = filePath;
             if (isPlaceGameFile || isPlaceDetailFile) {
                 const fileDataUrl = await promises_1.default.readFile(filePath, { encoding: "base64" });
                 const dataUrlWithMimeType = prefixForGltfDataUrl + fileDataUrl;
@@ -96,6 +101,45 @@ function splitFilePath(fullPathOriginal) {
     }
     const files = await promises_1.default.readdir(folderPath);
     await Promise.all(files.map((fileName) => checkDirectoryItem(fileName)));
+    // ------------------------------------------------
+    // Read Gltf data
+    // ------------------------------------------------
+    // Get place info, like triggerNames, spotNames, camNames etc
+    // read glft file
+    const io = new core_1.NodeIO();
+    // Read.
+    let gltfDocument = await io.read(placeDetailGlbPath); // → Document
+    // document = await io.readBinary(placeDetailGlbFile); // Uint8Array → Document
+    console.log("gltfDocument.getRoot().listNodes()");
+    const placeRoot = gltfDocument.getRoot();
+    const transformNodes = placeRoot.listNodes();
+    for (const transformNode of transformNodes) {
+        const nodeName = transformNode.getName();
+        const nodeParent = transformNode.getParentNode();
+        const isARootNode = !nodeParent;
+        if (isARootNode) {
+            console.log(nodeName);
+            const nodeChildren = transformNode.listChildren();
+            console.log(nodeName, nodeChildren.length);
+            if (nodeName === "cameras") {
+            }
+        }
+        // Could check if the node name is walls etc, but ideally check the root children instead
+    }
+    // console.log(gltfDocument.getRoot().listNodes());
+    // get the cam names, trigger names, point names wall names and everything else needed from here
+    // NOTE maybe try to save the best lighting frame etc inside gltf custom properties or use a default
+    // Edit
+    // find the details node and delete it
+    // find the cameras, and remove the extra wrapping node for each one
+    // udpate the cameras min and maxZ based on the distances (NOTE may need to to this later from babylonjs! and return the values)
+    // Write. // NOTE move this to below the babylonjs parts
+    // NOTE won't work is _detail is writtern somewhere else, it might be better to build the new path from the placename
+    // await io.write(placeDetailGlbPath?.replace("_detail", ""), gltfDocument); // → void
+    // const newGlb = await io.writeBinary(gltfDocument); // Document → Uint8Array
+    // ------------------------------------------------
+    // Render pics in babylonjs
+    // ------------------------------------------------
     // Reccomended pupeteer args by babylonjs, not used yet
     // Don't disable the gpu
     let args = puppeteer_1.default.defaultArgs().filter((arg) => arg !== "--disable-gpu");
@@ -449,10 +493,9 @@ function splitFilePath(fullPathOriginal) {
         await page.evaluate(getCameraDepthScreenshot, camName);
         await page.screenshot({ path: `./${camName}_depth.png`, fullPage: true });
     }
-    // Get place info, like triggerNames, spotNames, camNames etc
-    // await page.evaluate(async () => {
-    //   const pageRefs = window.pageRefs;
-    // });
+    // ------------------------------------------------
+    // Create videos from pic renders
+    // ------------------------------------------------
     async function writeEnvFileDataToFile(envDataItem) {
         const envFilePath = path_1.default.join(folderPath, envDataItem.name);
         const envData = envDataItem.data;
