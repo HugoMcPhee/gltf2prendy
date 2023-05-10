@@ -27,12 +27,41 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.subtractPoints = void 0;
 const BABYLON = __importStar(require("babylonjs"));
 const puppeteer_1 = __importDefault(require("puppeteer"));
 // import chromePaths from "chrome-paths";
 const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
 const core_1 = require("@gltf-transform/core");
+function getDistance(value1, value2) {
+    return Math.sqrt(getDistanceSquared(value1, value2));
+}
+function getDistanceSquared(value1, value2) {
+    const x = value1.x - value2.x;
+    const y = value1.y - value2.y;
+    const z = value1.z - value2.z;
+    return x * x + y * y + z * z;
+}
+function subtractPoints(mainPoint, otherPoint) {
+    return {
+        x: mainPoint.x - otherPoint.x,
+        y: mainPoint.y - otherPoint.y,
+        z: mainPoint.z - otherPoint.z,
+    };
+}
+exports.subtractPoints = subtractPoints;
+function getVectorSpeedQuick(theVector) {
+    return (theVector.x * theVector.x +
+        theVector.y * theVector.y +
+        theVector.z * theVector.z);
+}
+function getVectorSpeed(theVector) {
+    return Math.sqrt(getVectorSpeedQuick(theVector));
+}
+function getVectorDistance(vectorA, vectorB) {
+    return Math.abs(getVectorSpeed(subtractPoints(vectorA, vectorB)));
+}
 function splitFilePath(fullPathOriginal) {
     const fullPath = fullPathOriginal.replaceAll("\\", "/");
     const lastSeparatorIndex = fullPath.lastIndexOf("/");
@@ -50,6 +79,9 @@ function splitFilePath(fullPathOriginal) {
         name: filenameWithoutExtension,
         extension: fileExtension,
     };
+}
+function fromPointArray(pointArray) {
+    return { x: pointArray[0], y: pointArray[1], z: pointArray[2] };
 }
 (async () => {
     // const nodeScriptPath = __dirname;
@@ -120,10 +152,14 @@ function splitFilePath(fullPathOriginal) {
     console.log("gltfDocument.getRoot().listNodes()");
     const placeRoot = gltfDocument.getRoot();
     const transformNodes = placeRoot.listNodes();
+    const transformNodesByName = {};
+    const cameraNodesByName = {}; // Camera
+    const camerasByName = {};
     for (const transformNode of transformNodes) {
         const nodeName = transformNode.getName();
         const nodeParent = transformNode.getParentNode();
         const isARootNode = !nodeParent;
+        transformNodesByName[nodeName] = transformNode;
         if (isARootNode) {
             const nodeChildren = transformNode.listChildren();
             console.log(nodeName, nodeChildren.length);
@@ -133,6 +169,40 @@ function splitFilePath(fullPathOriginal) {
                     placeInfo.camNames.push(camName);
                     // console.log(camNodeChild.getName());
                     // console.log(camNodeChild.listChildren());
+                    console.log(camName, "camNodeChild.getWorldTranslation()");
+                    console.log(camNodeChild.getWorldTranslation());
+                    const innerCamChildren = camNodeChild.listChildren();
+                    console.log("innerCamChildren");
+                    console.log(innerCamChildren.map((item) => item.getName()));
+                    for (const innerCamChild of innerCamChildren) {
+                        if (innerCamChild.getName() === camName) {
+                            console.log("innerCamChild");
+                            // console.log(innerCamChild);
+                            const foundCamera = innerCamChild.getCamera();
+                            // const foundCamera = innerCamChild.listChildren()[0];
+                            // console.log("foundCamera");
+                            // console.log(foundCamera);
+                            if (foundCamera) {
+                                console.log("foundCamera.listParents()");
+                                console.log(foundCamera.listParents().map((item) => item.getName()));
+                                console.log(innerCamChild.getName());
+                                console.log(camName, "innerCamChild.getWorldTranslation()");
+                                console.log(innerCamChild.getWorldTranslation());
+                                foundCamera.setName(camName);
+                                cameraNodesByName[camName] = innerCamChild;
+                                camerasByName[camName] = foundCamera;
+                                // foundCamera.parent
+                                camNodeChild.setCamera(foundCamera);
+                            }
+                            // innerCamChild.dispose(); // NOTE Disposing it here was causing issues before reading it
+                        }
+                    }
+                    console.log("=============================");
+                    console.log("=============================");
+                    console.log("=============================");
+                    console.log("camNodeChild.listChildren()");
+                    console.log(camNodeChild.listChildren().map((item) => item.getName()));
+                    // find the cameras, and remove the extra wrapping node for each one
                 }
             }
             else if (nodeName === "walls") {
@@ -155,19 +225,49 @@ function splitFilePath(fullPathOriginal) {
                     placeInfo.floorNames.push(camNodeChild.getName());
                 }
             }
+            else if (nodeName === "details") {
+                // find the details node and delete it
+                transformNode.dispose();
+            }
         }
         // Could check if the node name is walls etc, but ideally check the root children instead
     }
-    // console.log(gltfDocument.getRoot().listNodes());
-    // get the cam names, trigger names, point names wall names and everything else needed from here
-    // NOTE maybe try to save the best lighting frame etc inside gltf custom properties or use a default
+    // Update camera min and max z if they have depth points
+    for (const camName of placeInfo.camNames) {
+        // get the camera node
+        const camNode = cameraNodesByName[camName];
+        const foundCamera = camerasByName[camName];
+        if (camNode && foundCamera) {
+            let nearDepthPoint = null;
+            let farDepthPoint = null;
+            // get the camera position
+            const camPos = fromPointArray(camNode.getWorldTranslation());
+            // check if it has a near depth point
+            const nearDepthNode = transformNodesByName[camName + "_depth_near"];
+            if (nearDepthNode) {
+                nearDepthPoint = fromPointArray(nearDepthNode.getWorldTranslation());
+            }
+            // check if it has a far depth point
+            const farDepthNode = transformNodesByName[camName + "_depth"] ||
+                transformNodesByName[camName + "_depth_far"];
+            if (farDepthNode) {
+                farDepthPoint = fromPointArray(farDepthNode.getWorldTranslation());
+            }
+            console.log(camName, "zNear", nearDepthPoint ? getDistance(nearDepthPoint, camPos) : 1);
+            console.log(camName, "zFar", farDepthPoint ? getDistance(farDepthPoint, camPos) : 1);
+            console.log(camName, "camPos", camPos);
+            console.log(camName, "farDepthPoint", farDepthPoint);
+            console.log(camName, "nearDepthPoint", nearDepthPoint);
+            // get the vector distance using chootils
+            foundCamera.setZNear(nearDepthPoint ? getDistance(camPos, nearDepthPoint) : 1);
+            foundCamera.setZFar(farDepthPoint ? getDistance(camPos, farDepthPoint) : 100);
+        }
+    }
     // Edit
-    // find the details node and delete it
-    // find the cameras, and remove the extra wrapping node for each one
     // udpate the cameras min and maxZ based on the distances (NOTE may need to to this later from babylonjs! and return the values)
     // Write. // NOTE move this to below the babylonjs parts
     // NOTE won't work is _detail is writtern somewhere else, it might be better to build the new path from the placename
-    // await io.write(placeDetailGlbPath?.replace("_detail", ""), gltfDocument); // → void
+    await io.write(placeDetailGlbPath?.replace("_detail", "_edited"), gltfDocument); // → void
     // const newGlb = await io.writeBinary(gltfDocument); // Document → Uint8Array
     // ------------------------------------------------
     // Render pics in babylonjs
@@ -182,8 +282,8 @@ function splitFilePath(fullPathOriginal) {
     args.push(`--window-size=1000,1000`);
     // Lanch pupeteer with custom arguments
     let launchOptions = {
-        // headless: false,
-        headless: true,
+        headless: false,
+        // headless: true,
         // ignoreDefaultArgs: true,
         // executablePath: chromePaths.chrome,
         // args,
@@ -200,7 +300,7 @@ function splitFilePath(fullPathOriginal) {
     await page.addScriptTag({
         url: "https://cdn.babylonjs.com/loaders/babylonjs.loaders.js",
     });
-    const { camNames } = (await page.evaluate(async (gltfFilesData) => {
+    const {} = (await page.evaluate(async (gltfFilesData, placeInfo) => {
         // ----------------------------------
         // From chootils    TODO (import in node and transfer to pupeteer page?)
         // ----------------------------------
@@ -304,11 +404,13 @@ function splitFilePath(fullPathOriginal) {
                     // change the transform node name holding the camera,
                     // since nomad-sculpt calls it the same as the camera name,
                     // but there's already a group called that
-                    camera.parent.name = camName + "_nomad";
-                    camera.parent.id = camName + "_nomad";
+                    camera.parent.name = camName + "_node";
+                    camera.parent.id = camName + "_node";
                 }
             });
             const transformNodes = keyBy(container.transformNodes);
+            console.log("container.transformNodes");
+            console.log(container.transformNodes);
             const animationGroups = keyBy(container.animationGroups);
             const skeletons = keyBy(container.skeletons);
             return {
@@ -382,8 +484,8 @@ function splitFilePath(fullPathOriginal) {
             modelFile.transformNodes.walls?.setEnabled(false);
             modelFile.transformNodes.triggers?.setEnabled(false);
             modelFile.transformNodes.floors?.setEnabled(false);
-            const camNames = Object.keys(modelFile.cameras);
-            for (const camName of camNames) {
+            // const camNames = Object.keys(modelFile.cameras);
+            for (const camName of placeInfo.camNames) {
                 modelFile.transformNodes?.[camName]?.setEnabled(false);
             }
             BABYLON.ShaderStore.ShadersStore["viewDepthPixelShader"] =
@@ -403,12 +505,7 @@ function splitFilePath(fullPathOriginal) {
                 console.log("modelFile.transformNodes");
                 console.log(modelFile?.transformNodes);
                 await setUpPlaceForRendering({ scene, engine, modelFile });
-                if (modelFile) {
-                    const camNames = Object.keys(modelFile.cameras);
-                    return { camNames };
-                }
             }
-            return { camNames: [] };
         }
         // ----------------------------------
         // Converting HDR to Env
@@ -431,13 +528,11 @@ function splitFilePath(fullPathOriginal) {
             // const binaryFileResult = await getBlobAsBinaryString(blob);
         }
         await waitForSceneReady();
-        const { camNames } = await handleGltfModel();
+        await handleGltfModel();
         // load gltf files here (from base64?)
         // gltfFilesData
-        return { camNames };
-    }, gltfFilesData)) ?? {};
-    console.log("camNames");
-    console.log(camNames);
+        return {};
+    }, gltfFilesData, placeInfo)) ?? {};
     console.log("placeInfo.camNames");
     console.log(placeInfo.camNames);
     console.log("placeInfo");
@@ -471,7 +566,10 @@ function splitFilePath(fullPathOriginal) {
         if (!delay || !modelFile || !engine || !scene)
             return;
         const camera = modelFile.cameras[camName];
+        const cameraNode = modelFile.transformNodes[camName + "_node"];
         if (!camera)
+            return;
+        if (!cameraNode)
             return;
         let depthRenderer = null;
         camera.computeWorldMatrix();
@@ -482,6 +580,8 @@ function splitFilePath(fullPathOriginal) {
             cameraDepthFarPoint.computeWorldMatrix();
         if (cameraDepthNearPoint)
             cameraDepthNearPoint.computeWorldMatrix();
+        if (cameraNode)
+            cameraNode.computeWorldMatrix();
         const originalMinZ = camera.minZ;
         const originalMaxZ = camera.maxZ;
         const depthMinZ = cameraDepthNearPoint
@@ -490,6 +590,19 @@ function splitFilePath(fullPathOriginal) {
         const depthMaxZ = cameraDepthFarPoint
             ? BABYLON.Vector3.Distance(camera.globalPosition, cameraDepthFarPoint.absolutePosition)
             : 100;
+        function vector3ToPoint3(value) {
+            return { x: value?._x, y: value?._y, z: value?._z };
+        }
+        if (camName.includes("room")) {
+            console.log(camName, "depthMinZ", depthMinZ);
+            console.log(camName, "depthMaxZ", depthMaxZ);
+            console.log(camName, "camera.position", vector3ToPoint3(camera?.position));
+            console.log(camName, "camera.globalPosition", vector3ToPoint3(camera?.globalPosition));
+            console.log(camName, "cameraNode.absolutePosition", vector3ToPoint3(cameraNode?.absolutePosition));
+            console.log(camName, "cameraDepthNearPoint", cameraDepthNearPoint?.absolutePosition);
+            console.log(camName, "cameraDepthFarPoint", cameraDepthFarPoint?.absolutePosition);
+            // await delay(15000);
+        }
         engine.setSize(1920, 1080);
         camera.minZ = 0.1;
         camera.maxZ = 10000;

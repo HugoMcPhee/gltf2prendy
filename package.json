@@ -20,7 +20,7 @@
     "@gltf-transform/core": "^3.2.1",
     "@types/puppeteer-core": "^7.0.4",
     "babylonjs": "^5.54.0",
-    "chootils": "^0.3.8",
+    "chootils": "^0.3.9",
     "chrome-paths": "^1.0.1",
     "delay": "^5.0.0",
     "puppeteer": "^19.5.2",
