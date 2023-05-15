@@ -15,6 +15,9 @@ import { NodeIO, Node, Camera, vec3 } from "@gltf-transform/core";
 // import { getVectorDistance } from "chootils/dist/speedAngleDistance3d";
 import { Point3D } from "chootils/dist/points3d";
 
+import { writeFile } from "fs/promises";
+import { createFFmpeg, fetchFile } from "@ffmpeg.wasm/main";
+
 // function getDistance(value1: Point3D, value2: Point3D): number {
 //   return Math.sqrt(getDistanceSquared(value1, value2));
 // }
@@ -132,6 +135,8 @@ function splitFilePath(fullPathOriginal: string) {
 function fromPointArray(pointArray: vec3) {
   return { x: pointArray[0], y: pointArray[1], z: pointArray[2] };
 }
+
+const ffmpeg = createFFmpeg({ log: true });
 
 (async () => {
   // const nodeScriptPath = __dirname;
@@ -378,240 +383,241 @@ function fromPointArray(pointArray: vec3) {
   // ------------------------------------------------
   // Render pics in babylonjs
   // ------------------------------------------------
+  if (false) {
+    // Reccomended pupeteer args by babylonjs, not used yet
+    // Don't disable the gpu
+    let args = puppeteer.defaultArgs().filter((arg) => arg !== "--disable-gpu");
+    // Run in non-headless mode
+    args = args.filter((arg) => arg !== "--headless");
+    // Use desktop graphics
+    args.push("--use-gl=desktop");
+    args.push(`--window-size=1000,1000`);
 
-  // Reccomended pupeteer args by babylonjs, not used yet
-  // Don't disable the gpu
-  let args = puppeteer.defaultArgs().filter((arg) => arg !== "--disable-gpu");
-  // Run in non-headless mode
-  args = args.filter((arg) => arg !== "--headless");
-  // Use desktop graphics
-  args.push("--use-gl=desktop");
-  args.push(`--window-size=1000,1000`);
+    // Lanch pupeteer with custom arguments
+    let launchOptions = {
+      // headless: false,
+      headless: true,
+      // ignoreDefaultArgs: true,
+      // executablePath: chromePaths.chrome,
+      // args,
+      args: [`--window-size=1920,1080`],
+      defaultViewport: null,
+    };
 
-  // Lanch pupeteer with custom arguments
-  let launchOptions = {
-    headless: false,
-    // headless: true,
-    // ignoreDefaultArgs: true,
-    // executablePath: chromePaths.chrome,
-    // args,
-    args: [`--window-size=1920,1080`],
-    defaultViewport: null,
-  };
+    const browser = await puppeteer.launch(launchOptions);
 
-  const browser = await puppeteer.launch(launchOptions);
+    const page = await browser.newPage();
 
-  const page = await browser.newPage();
+    await page.addStyleTag({
+      content: `body{ margin: 0 !important; width: 1920px; height: 1080px}`,
+    });
+    // await page.addScriptTag({ url: "https://cdn.babylonjs.com/babylon.js" });
+    await page.addScriptTag({
+      url: "https://cdn.babylonjs.com/babylon.max.js",
+    });
+    await page.addScriptTag({
+      url: "https://cdn.babylonjs.com/loaders/babylonjs.loaders.js",
+    });
 
-  await page.addStyleTag({
-    content: `body{ margin: 0 !important; width: 1920px; height: 1080px}`,
-  });
-  // await page.addScriptTag({ url: "https://cdn.babylonjs.com/babylon.js" });
-  await page.addScriptTag({ url: "https://cdn.babylonjs.com/babylon.max.js" });
-  await page.addScriptTag({
-    url: "https://cdn.babylonjs.com/loaders/babylonjs.loaders.js",
-  });
+    const {} =
+      (await page.evaluate(
+        async (gltfFilesData, placeInfo) => {
+          // ----------------------------------
+          // From chootils    TODO (import in node and transfer to pupeteer page?)
+          // ----------------------------------
 
-  const {} =
-    (await page.evaluate(
-      async (gltfFilesData, placeInfo) => {
-        // ----------------------------------
-        // From chootils    TODO (import in node and transfer to pupeteer page?)
-        // ----------------------------------
-
-        function forEach<T_ArrayItem>(
-          theArray: T_ArrayItem[] | Readonly<T_ArrayItem[]>,
-          whatToDo: (item: T_ArrayItem, index: number) => any
-        ) {
-          const arrayLength = theArray.length;
-          for (let index = 0; index < arrayLength; index++) {
-            whatToDo(theArray[index], index);
+          function forEach<T_ArrayItem>(
+            theArray: T_ArrayItem[] | Readonly<T_ArrayItem[]>,
+            whatToDo: (item: T_ArrayItem, index: number) => any
+          ) {
+            const arrayLength = theArray.length;
+            for (let index = 0; index < arrayLength; index++) {
+              whatToDo(theArray[index], index);
+            }
           }
-        }
 
-        function keyBy<T_ArrayItem extends Record<any, any>>(
-          theArray: T_ArrayItem[],
-          theKey: keyof T_ArrayItem = "name",
-          transformKey?: (theKey: string) => string, // to allow editing a key before storing it
-          excludeName?: string
-        ) {
-          const newObject: Record<string, T_ArrayItem> = {};
-          if (excludeName) {
-            forEach(theArray, (loopedItem) => {
-              const loopedName: string = loopedItem[theKey];
-              if (loopedName !== excludeName) {
+          function keyBy<T_ArrayItem extends Record<any, any>>(
+            theArray: T_ArrayItem[],
+            theKey: keyof T_ArrayItem = "name",
+            transformKey?: (theKey: string) => string, // to allow editing a key before storing it
+            excludeName?: string
+          ) {
+            const newObject: Record<string, T_ArrayItem> = {};
+            if (excludeName) {
+              forEach(theArray, (loopedItem) => {
+                const loopedName: string = loopedItem[theKey];
+                if (loopedName !== excludeName) {
+                  const newKey =
+                    transformKey?.(loopedItem[theKey]) ?? loopedItem[theKey];
+                  newObject[newKey] = loopedItem;
+                }
+              });
+            } else {
+              forEach(theArray, (loopedItem) => {
                 const newKey =
                   transformKey?.(loopedItem[theKey]) ?? loopedItem[theKey];
                 newObject[newKey] = loopedItem;
-              }
-            });
-          } else {
-            forEach(theArray, (loopedItem) => {
-              const newKey =
-                transformKey?.(loopedItem[theKey]) ?? loopedItem[theKey];
-              newObject[newKey] = loopedItem;
-            });
+              });
+            }
+            return newObject;
           }
-          return newObject;
-        }
 
-        window.pageRefs = {
-          delay: async (time: number) => {
-            return new Promise((resolve, reject) => {
-              setTimeout(resolve, time);
-            });
-          },
-          forEach,
-          keyBy,
-        };
+          window.pageRefs = {
+            delay: async (time: number) => {
+              return new Promise((resolve, reject) => {
+                setTimeout(resolve, time);
+              });
+            },
+            forEach,
+            keyBy,
+          };
 
-        const pageRefs = window.pageRefs;
+          const pageRefs = window.pageRefs;
 
-        const { delay } = window.pageRefs;
-        if (!delay) return;
+          const { delay } = window.pageRefs;
+          if (!delay) return;
 
-        // ----------------------------------
-        // Setting up a babylonjs scene
-        // ----------------------------------
-        var canvas = document.createElement("canvas");
-        canvas.id = "renderCanvas";
-        canvas.width = 1920;
-        canvas.height = 1080;
-        document.body.appendChild(canvas);
+          // ----------------------------------
+          // Setting up a babylonjs scene
+          // ----------------------------------
+          var canvas = document.createElement("canvas");
+          canvas.id = "renderCanvas";
+          canvas.width = 1920;
+          canvas.height = 1080;
+          document.body.appendChild(canvas);
 
-        var engine = new BABYLON.Engine(canvas, true, {
-          preserveDrawingBuffer: true,
-          stencil: true,
-          premultipliedAlpha: false,
-        });
-        pageRefs.engine = engine;
-
-        var scene = new BABYLON.Scene(engine);
-
-        pageRefs.scene = scene;
-
-        var camera = new BABYLON.FreeCamera(
-          "camera1",
-          new BABYLON.Vector3(0, 5, -10),
-          scene
-        );
-
-        const mainLight = new BABYLON.HemisphericLight(
-          "light1",
-          BABYLON.Vector3.Up(),
-          scene
-        );
-        mainLight.intensity = 0.7;
-
-        camera.setTarget(BABYLON.Vector3.Zero());
-        camera.attachControl(canvas, true);
-
-        engine.setSize(1920, 1080);
-
-        // ----------------------------------
-        // Rendering GTLF file pics
-        // ----------------------------------
-
-        function getFileFromBase64(
-          base64String: string,
-          fileName: string
-        ): File {
-          const editedBase64 = base64String
-            .replace("data:", "")
-            .replace(/^.+,/, "");
-
-          const byteString = window.atob(editedBase64);
-          const byteStringLength = byteString.length;
-          const byteArray = new Uint8Array(byteStringLength);
-          for (let i = 0; i < byteStringLength; i++) {
-            byteArray[i] = byteString.charCodeAt(i);
-          }
-          const blob = new Blob([byteArray], {
-            type: "application/octet-stream",
+          var engine = new BABYLON.Engine(canvas, true, {
+            preserveDrawingBuffer: true,
+            stencil: true,
+            premultipliedAlpha: false,
           });
-          return new File([blob], fileName, {
-            type: "application/octet-stream",
-          });
-        }
+          pageRefs.engine = engine;
 
-        async function loadModelFile({
-          modelBase64,
-          scene,
-        }: {
-          modelBase64: string;
-          scene: BABYLON.Scene | null;
-        }) {
-          if (!scene || !modelBase64) return;
+          var scene = new BABYLON.Scene(engine);
 
-          const modelAsFile = getFileFromBase64(
-            modelBase64,
-            "exampleFilename.glb"
+          pageRefs.scene = scene;
+
+          var camera = new BABYLON.FreeCamera(
+            "camera1",
+            new BABYLON.Vector3(0, 5, -10),
+            scene
           );
 
-          const container: BABYLON.AssetContainer =
-            await BABYLON.SceneLoader.LoadAssetContainerAsync(
-              "model",
-              modelAsFile,
-              scene
+          const mainLight = new BABYLON.HemisphericLight(
+            "light1",
+            BABYLON.Vector3.Up(),
+            scene
+          );
+          mainLight.intensity = 0.7;
+
+          camera.setTarget(BABYLON.Vector3.Zero());
+          camera.attachControl(canvas, true);
+
+          engine.setSize(1920, 1080);
+
+          // ----------------------------------
+          // Rendering GTLF file pics
+          // ----------------------------------
+
+          function getFileFromBase64(
+            base64String: string,
+            fileName: string
+          ): File {
+            const editedBase64 = base64String
+              .replace("data:", "")
+              .replace(/^.+,/, "");
+
+            const byteString = window.atob(editedBase64);
+            const byteStringLength = byteString.length;
+            const byteArray = new Uint8Array(byteStringLength);
+            for (let i = 0; i < byteStringLength; i++) {
+              byteArray[i] = byteString.charCodeAt(i);
+            }
+            const blob = new Blob([byteArray], {
+              type: "application/octet-stream",
+            });
+            return new File([blob], fileName, {
+              type: "application/octet-stream",
+            });
+          }
+
+          async function loadModelFile({
+            modelBase64,
+            scene,
+          }: {
+            modelBase64: string;
+            scene: BABYLON.Scene | null;
+          }) {
+            if (!scene || !modelBase64) return;
+
+            const modelAsFile = getFileFromBase64(
+              modelBase64,
+              "exampleFilename.glb"
             );
 
-          container.addAllToScene();
+            const container: BABYLON.AssetContainer =
+              await BABYLON.SceneLoader.LoadAssetContainerAsync(
+                "model",
+                modelAsFile,
+                scene
+              );
 
-          const meshes: Record<string, BABYLON.AbstractMesh> = keyBy(
-            container.meshes
-          ) as Record<string, BABYLON.AbstractMesh>;
-          const materials: Record<string, BABYLON.PBRMaterial> = keyBy(
-            container.materials as BABYLON.PBRMaterial[]
-          );
-          const textures: Record<string, BABYLON.Texture> = keyBy(
-            container.textures
-          ) as Record<string, BABYLON.Texture>;
+            container.addAllToScene();
 
-          let cameras: Record<string, BABYLON.Camera> = {};
-          forEach(container.cameras, (camera) => {
-            const camName = camera?.parent?.name ?? camera.name;
+            const meshes: Record<string, BABYLON.AbstractMesh> = keyBy(
+              container.meshes
+            ) as Record<string, BABYLON.AbstractMesh>;
+            const materials: Record<string, BABYLON.PBRMaterial> = keyBy(
+              container.materials as BABYLON.PBRMaterial[]
+            );
+            const textures: Record<string, BABYLON.Texture> = keyBy(
+              container.textures
+            ) as Record<string, BABYLON.Texture>;
 
-            camera.name = camName;
-            camera.id = camName;
-            cameras[camName] = camera;
+            let cameras: Record<string, BABYLON.Camera> = {};
+            forEach(container.cameras, (camera) => {
+              const camName = camera?.parent?.name ?? camera.name;
 
-            if (camera.parent) {
-              // change the transform node name holding the camera,
-              // since nomad-sculpt calls it the same as the camera name,
-              // but there's already a group called that
-              camera.parent.name = camName + "_node";
-              camera.parent.id = camName + "_node";
-            }
-          });
+              camera.name = camName;
+              camera.id = camName;
+              cameras[camName] = camera;
 
-          const transformNodes: Record<string, BABYLON.TransformNode> = keyBy(
-            container.transformNodes
-          );
-          console.log("container.transformNodes");
-          console.log(container.transformNodes);
+              if (camera.parent) {
+                // change the transform node name holding the camera,
+                // since nomad-sculpt calls it the same as the camera name,
+                // but there's already a group called that
+                camera.parent.name = camName + "_node";
+                camera.parent.id = camName + "_node";
+              }
+            });
 
-          const animationGroups: Record<string, BABYLON.AnimationGroup> = keyBy(
-            container.animationGroups
-          );
-          const skeletons: Record<string, BABYLON.Skeleton> = keyBy(
-            container.skeletons
-          );
+            const transformNodes: Record<string, BABYLON.TransformNode> = keyBy(
+              container.transformNodes
+            );
+            console.log("container.transformNodes");
+            console.log(container.transformNodes);
 
-          return {
-            meshes,
-            materials,
-            textures,
-            transformNodes,
-            animationGroups,
-            skeletons,
-            cameras,
-            container, // container.removeAllFromScene();
-          };
-        }
+            const animationGroups: Record<string, BABYLON.AnimationGroup> =
+              keyBy(container.animationGroups);
+            const skeletons: Record<string, BABYLON.Skeleton> = keyBy(
+              container.skeletons
+            );
 
-        const shaders = {
-          viewDepth: {
-            fragment: `
+            return {
+              meshes,
+              materials,
+              textures,
+              transformNodes,
+              animationGroups,
+              skeletons,
+              cameras,
+              container, // container.removeAllFromScene();
+            };
+          }
+
+          const shaders = {
+            viewDepth: {
+              fragment: `
           precision highp float;
           
           /// <summary>
@@ -636,7 +642,7 @@ function fromPointArray(pointArray: vec3) {
           gl_FragColor = sceneDepthColors;
           }
               `,
-            vertex: `
+              vertex: `
           // Attributes
           attribute vec2 position;
           
@@ -661,276 +667,406 @@ function fromPointArray(pointArray: vec3) {
           #define CUSTOM_VERTEX_MAIN_END
           }
               `,
-          },
-        };
+            },
+          };
 
-        async function setUpPlaceForRendering({
-          modelFile,
-          engine,
-          scene,
-        }: {
-          modelFile: Awaited<ReturnType<typeof loadModelFile>>;
-          scene: BABYLON.Scene | null;
-          engine: BABYLON.Engine | null;
-        }) {
-          if (!modelFile) return;
+          async function setUpPlaceForRendering({
+            modelFile,
+            engine,
+            scene,
+          }: {
+            modelFile: Awaited<ReturnType<typeof loadModelFile>>;
+            scene: BABYLON.Scene | null;
+            engine: BABYLON.Engine | null;
+          }) {
+            if (!modelFile) return;
 
-          modelFile.transformNodes.walls?.setEnabled(false);
-          modelFile.transformNodes.triggers?.setEnabled(false);
-          modelFile.transformNodes.floors?.setEnabled(false);
+            modelFile.transformNodes.walls?.setEnabled(false);
+            modelFile.transformNodes.triggers?.setEnabled(false);
+            modelFile.transformNodes.floors?.setEnabled(false);
 
-          // const camNames = Object.keys(modelFile.cameras);
-          for (const camName of placeInfo.camNames) {
-            modelFile.transformNodes?.[camName]?.setEnabled(false);
+            // const camNames = Object.keys(modelFile.cameras);
+            for (const camName of placeInfo.camNames) {
+              modelFile.transformNodes?.[camName]?.setEnabled(false);
+            }
+
+            BABYLON.ShaderStore.ShadersStore["viewDepthPixelShader"] =
+              shaders.viewDepth.fragment;
+            BABYLON.ShaderStore.ShadersStore["viewDepthVertexShader"] =
+              shaders.viewDepth.vertex;
           }
 
-          BABYLON.ShaderStore.ShadersStore["viewDepthPixelShader"] =
-            shaders.viewDepth.fragment;
-          BABYLON.ShaderStore.ShadersStore["viewDepthVertexShader"] =
-            shaders.viewDepth.vertex;
-        }
+          async function handleGltfModel() {
+            if (gltfFilesData.detailModel) {
+              const modelFile = await loadModelFile({
+                modelBase64: gltfFilesData.detailModel,
+                scene: scene,
+              });
 
-        async function handleGltfModel() {
-          if (gltfFilesData.detailModel) {
-            const modelFile = await loadModelFile({
-              modelBase64: gltfFilesData.detailModel,
-              scene: scene,
-            });
+              window.pageRefs.modelFile = modelFile;
 
-            window.pageRefs.modelFile = modelFile;
+              console.log("modelFile");
+              console.log(modelFile);
 
-            console.log("modelFile");
-            console.log(modelFile);
+              console.log("modelFile.transformNodes");
+              console.log(modelFile?.transformNodes);
 
-            console.log("modelFile.transformNodes");
-            console.log(modelFile?.transformNodes);
-
-            await setUpPlaceForRendering({ scene, engine, modelFile });
+              await setUpPlaceForRendering({ scene, engine, modelFile });
+            }
           }
-        }
 
-        // ----------------------------------
-        // Converting HDR to Env
-        // ----------------------------------
+          // ----------------------------------
+          // Converting HDR to Env
+          // ----------------------------------
 
-        async function waitForSceneReady() {
-          return new Promise(async (resolve, reject) => {
-            scene?.executeWhenReady(() => {
-              resolve(null);
+          async function waitForSceneReady() {
+            return new Promise(async (resolve, reject) => {
+              scene?.executeWhenReady(() => {
+                resolve(null);
+              });
             });
-          });
-        }
-        async function getBlobAsBinaryString(
-          theBlob: Blob
-        ): Promise<string | ArrayBuffer | null> {
-          return new Promise(async (resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsBinaryString(theBlob);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = () =>
-              reject("Error occurred while reading binary string");
-          });
-          // var blob = new Blob([arrayBuffer], { type: "octet/stream" });
-          // const binaryFileResult = await getBlobAsBinaryString(blob);
-        }
+          }
+          async function getBlobAsBinaryString(
+            theBlob: Blob
+          ): Promise<string | ArrayBuffer | null> {
+            return new Promise(async (resolve, reject) => {
+              const reader = new FileReader();
+              reader.readAsBinaryString(theBlob);
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = () =>
+                reject("Error occurred while reading binary string");
+            });
+            // var blob = new Blob([arrayBuffer], { type: "octet/stream" });
+            // const binaryFileResult = await getBlobAsBinaryString(blob);
+          }
 
-        await waitForSceneReady();
+          await waitForSceneReady();
 
-        await handleGltfModel();
+          await handleGltfModel();
 
-        // load gltf files here (from base64?)
-        // gltfFilesData
+          // load gltf files here (from base64?)
+          // gltfFilesData
 
-        return {};
-      },
-      gltfFilesData,
-      placeInfo
-    )) ?? {};
+          return {};
+        },
+        gltfFilesData,
+        placeInfo
+      )) ?? {};
 
-  console.log("placeInfo.camNames");
-  console.log(placeInfo.camNames);
-  console.log("placeInfo");
-  console.log(placeInfo);
+    console.log("placeInfo.camNames");
+    console.log(placeInfo.camNames);
+    console.log("placeInfo");
+    console.log(placeInfo);
 
-  async function getCameraColorScreenshot(camName: string) {
-    // use this whole function inside evaluate
+    async function getCameraColorScreenshot(camName: string) {
+      // use this whole function inside evaluate
 
-    // remove the old depth postProcess
-    window.pageRefs.depthPostProcess?.dispose();
+      // remove the old depth postProcess
+      window.pageRefs.depthPostProcess?.dispose();
 
-    const { modelFile, delay, engine, scene } = window.pageRefs;
-    if (!delay || !modelFile || !engine || !scene) return;
-    const camera = modelFile.cameras[camName];
-    if (!camera) return;
+      const { modelFile, delay, engine, scene } = window.pageRefs;
+      if (!delay || !modelFile || !engine || !scene) return;
+      const camera = modelFile.cameras[camName];
+      if (!camera) return;
 
-    const originalMinZ = camera.minZ;
-    const originalMaxZ = camera.maxZ;
+      const originalMinZ = camera.minZ;
+      const originalMaxZ = camera.maxZ;
 
-    engine.setSize(1920, 1080);
+      engine.setSize(1920, 1080);
 
-    camera.minZ = 0.1;
-    camera.maxZ = 10000;
-    scene.activeCamera = camera;
+      camera.minZ = 0.1;
+      camera.maxZ = 10000;
+      scene.activeCamera = camera;
 
-    scene.render();
-    // allow some time for rendering
-    await delay(100);
+      scene.render();
+      // allow some time for rendering
+      await delay(50);
 
-    // set cameras view distance back to their original
-    camera.minZ = originalMinZ;
-    camera.maxZ = originalMaxZ;
-  }
-
-  async function getCameraDepthScreenshot(camName: string) {
-    // use this whole function inside evaluate
-
-    const { modelFile, delay, engine, scene } = window.pageRefs;
-    if (!delay || !modelFile || !engine || !scene) return;
-
-    const camera = modelFile.cameras[camName];
-    const cameraNode = modelFile.transformNodes[camName + "_node"];
-    if (!camera) return;
-    if (!cameraNode) return;
-
-    let depthRenderer: null | BABYLON.DepthRenderer = null;
-
-    camera.computeWorldMatrix();
-    const cameraDepthFarPoint =
-      modelFile.transformNodes[camName + "_depth_far"] ??
-      modelFile.transformNodes[camName + "_depth"];
-    const cameraDepthNearPoint =
-      modelFile.transformNodes[camName + "_depth_near"];
-
-    if (cameraDepthFarPoint) cameraDepthFarPoint.computeWorldMatrix();
-    if (cameraDepthNearPoint) cameraDepthNearPoint.computeWorldMatrix();
-    if (cameraNode) cameraNode.computeWorldMatrix();
-
-    const originalMinZ = camera.minZ;
-    const originalMaxZ = camera.maxZ;
-
-    const depthMinZ = cameraDepthNearPoint
-      ? BABYLON.Vector3.Distance(
-          camera.globalPosition,
-          cameraDepthNearPoint.absolutePosition
-        )
-      : 1;
-
-    const depthMaxZ = cameraDepthFarPoint
-      ? BABYLON.Vector3.Distance(
-          camera.globalPosition,
-          cameraDepthFarPoint.absolutePosition
-        )
-      : 100;
-
-    function vector3ToPoint3(value: BABYLON.Vector3) {
-      return { x: value?._x, y: value?._y, z: value?._z };
+      // set cameras view distance back to their original
+      camera.minZ = originalMinZ;
+      camera.maxZ = originalMaxZ;
     }
 
-    if (camName.includes("room")) {
-      console.log(camName, "depthMinZ", depthMinZ);
-      console.log(camName, "depthMaxZ", depthMaxZ);
-      console.log(
-        camName,
-        "camera.position",
-        vector3ToPoint3(camera?.position)
-      );
-      console.log(
-        camName,
-        "camera.globalPosition",
-        vector3ToPoint3(camera?.globalPosition)
-      );
-      console.log(
-        camName,
-        "cameraNode.absolutePosition",
-        vector3ToPoint3(cameraNode?.absolutePosition)
-      );
-      console.log(
-        camName,
-        "cameraDepthNearPoint",
-        cameraDepthNearPoint?.absolutePosition
-      );
-      console.log(
-        camName,
-        "cameraDepthFarPoint",
-        cameraDepthFarPoint?.absolutePosition
-      );
-      // await delay(15000);
-    }
-    engine.setSize(1920, 1080);
+    async function getCameraDepthScreenshot(camName: string) {
+      // use this whole function inside evaluate
 
-    camera.minZ = 0.1;
-    camera.maxZ = 10000;
-    scene.activeCamera = camera;
+      const { modelFile, delay, engine, scene } = window.pageRefs;
+      if (!delay || !modelFile || !engine || !scene) return;
 
-    camera.minZ = depthMinZ;
-    camera.maxZ = depthMaxZ;
+      const camera = modelFile.cameras[camName];
+      const cameraNode = modelFile.transformNodes[camName + "_node"];
+      if (!camera) return;
+      if (!cameraNode) return;
 
-    scene.enableDepthRenderer;
-    depthRenderer = scene.enableDepthRenderer(camera, false);
+      let depthRenderer: null | BABYLON.DepthRenderer = null;
 
-    scene.activeCamera = camera;
+      camera.computeWorldMatrix();
+      const cameraDepthFarPoint =
+        modelFile.transformNodes[camName + "_depth_far"] ??
+        modelFile.transformNodes[camName + "_depth"];
+      const cameraDepthNearPoint =
+        modelFile.transformNodes[camName + "_depth_near"];
 
-    window.pageRefs.depthPostProcess = new BABYLON.PostProcess(
-      "viewDepthShader",
-      "viewDepth",
-      [],
-      ["textureSampler", "SceneDepthTexture"], // textures
-      { width: 1920, height: 1080 },
-      camera,
-      // globalRefs.activeCamera
-      // Texture.NEAREST_SAMPLINGMODE // sampling
-      // globalRefs.scene.engine // engine,
-      // Texture.BILINEAR_SAMPLINGMODE,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      "viewDepth"
-    );
-    const depthRenderTarget = depthRenderer?.getDepthMap();
+      if (cameraDepthFarPoint) cameraDepthFarPoint.computeWorldMatrix();
+      if (cameraDepthNearPoint) cameraDepthNearPoint.computeWorldMatrix();
+      if (cameraNode) cameraNode.computeWorldMatrix();
 
-    if (depthRenderTarget) {
-      depthRenderTarget.activeCamera = camera;
-    }
-    window.pageRefs.depthPostProcess.onApply = (effect) => {
-      if (depthRenderTarget) {
-        effect?.setTexture("SceneDepthTexture", depthRenderTarget);
+      const originalMinZ = camera.minZ;
+      const originalMaxZ = camera.maxZ;
+
+      const depthMinZ = cameraDepthNearPoint
+        ? BABYLON.Vector3.Distance(
+            camera.globalPosition,
+            cameraDepthNearPoint.absolutePosition
+          )
+        : 1;
+
+      const depthMaxZ = cameraDepthFarPoint
+        ? BABYLON.Vector3.Distance(
+            camera.globalPosition,
+            cameraDepthFarPoint.absolutePosition
+          )
+        : 100;
+
+      function vector3ToPoint3(value: BABYLON.Vector3) {
+        return { x: value?._x, y: value?._y, z: value?._z };
       }
-    };
 
-    scene.render();
+      if (camName.includes("room")) {
+        console.log(camName, "depthMinZ", depthMinZ);
+        console.log(camName, "depthMaxZ", depthMaxZ);
+        console.log(
+          camName,
+          "camera.position",
+          vector3ToPoint3(camera?.position)
+        );
+        console.log(
+          camName,
+          "camera.globalPosition",
+          vector3ToPoint3(camera?.globalPosition)
+        );
+        console.log(
+          camName,
+          "cameraNode.absolutePosition",
+          vector3ToPoint3(cameraNode?.absolutePosition)
+        );
+        console.log(
+          camName,
+          "cameraDepthNearPoint",
+          cameraDepthNearPoint?.absolutePosition
+        );
+        console.log(
+          camName,
+          "cameraDepthFarPoint",
+          cameraDepthFarPoint?.absolutePosition
+        );
+        // await delay(15000);
+      }
+      engine.setSize(1920, 1080);
 
-    // allow some time for rendering
-    await delay(100);
+      camera.minZ = 0.1;
+      camera.maxZ = 10000;
+      scene.activeCamera = camera;
 
-    // set cameras view distance back to their original
-    camera.minZ = originalMinZ;
-    camera.maxZ = originalMaxZ;
-  }
+      camera.minZ = depthMinZ;
+      camera.maxZ = depthMaxZ;
 
-  // Get color and depth renders for all cameras
-  for (const camName of placeInfo.camNames ?? []) {
-    await page.evaluate(getCameraColorScreenshot, camName);
-    await page.screenshot({ path: `./${camName}.png`, fullPage: true });
+      scene.enableDepthRenderer;
+      depthRenderer = scene.enableDepthRenderer(camera, false);
 
-    await page.evaluate(getCameraDepthScreenshot, camName);
-    await page.screenshot({ path: `./${camName}_depth.png`, fullPage: true });
-  }
+      scene.activeCamera = camera;
 
-  // ------------------------------------------------
-  // Create videos from pic renders
-  // ------------------------------------------------
+      window.pageRefs.depthPostProcess = new BABYLON.PostProcess(
+        "viewDepthShader",
+        "viewDepth",
+        [],
+        ["textureSampler", "SceneDepthTexture"], // textures
+        { width: 1920, height: 1080 },
+        camera,
+        // globalRefs.activeCamera
+        // Texture.NEAREST_SAMPLINGMODE // sampling
+        // globalRefs.scene.engine // engine,
+        // Texture.BILINEAR_SAMPLINGMODE,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "viewDepth"
+      );
+      const depthRenderTarget = depthRenderer?.getDepthMap();
 
-  async function writeEnvFileDataToFile(envDataItem: EnvFileData) {
-    const envFilePath = path.join(folderPath, envDataItem.name);
-    const envData = envDataItem.data;
-    if (typeof envData === "string") {
-      const nodeFile = Buffer.from(envData, "binary");
-      await fs.writeFile(envFilePath, nodeFile, "binary");
+      if (depthRenderTarget) {
+        depthRenderTarget.activeCamera = camera;
+      }
+      window.pageRefs.depthPostProcess.onApply = (effect) => {
+        if (depthRenderTarget) {
+          effect?.setTexture("SceneDepthTexture", depthRenderTarget);
+        }
+      };
+
+      scene.render();
+
+      // allow some time for rendering
+      await delay(50);
+
+      // set cameras view distance back to their original
+      camera.minZ = originalMinZ;
+      camera.maxZ = originalMaxZ;
     }
+
+    // Get color and depth renders for all cameras
+    for (const camName of placeInfo.camNames ?? []) {
+      await page.evaluate(getCameraColorScreenshot, camName);
+      await page.screenshot({ path: `./${camName}.png`, fullPage: true });
+
+      await page.evaluate(getCameraDepthScreenshot, camName);
+      await page.screenshot({ path: `./${camName}_depth.png`, fullPage: true });
+    }
+
+    // ------------------------------------------------
+    // Create videos from pic renders
+    // ------------------------------------------------
+
+    async function writeEnvFileDataToFile(envDataItem: EnvFileData) {
+      const envFilePath = path.join(folderPath, envDataItem.name);
+      const envData = envDataItem.data;
+      if (typeof envData === "string") {
+        const nodeFile = Buffer.from(envData, "binary");
+        await fs.writeFile(envFilePath, nodeFile, "binary");
+      }
+    }
+
+    // close the browser
+    await browser.close();
+  }
+  // find the images and load into ffmpeg stuff
+  await ffmpeg.load();
+  console.log("ffmpeg loaded");
+
+  const chosen_framerate = 1;
+  const frame_image_path = "";
+  const video_quality = 25;
+  const keyframes = 1;
+  const video_output_path = "";
+
+  async function makeVideoFromPics(isDepthVid: boolean) {
+    const frameDuration = 1; // seconds
+
+    // const makeVideoCommand = `C:\\ffmpeg -framerate ${chosen_framerate} -f image2 -i "${frame_image_path}%04d.png" -vcodec libx264 -crf ${video_quality} -g ${keyframes} -vf "fps=${chosen_framerate},format=yuv420p,scale=1280:720" -y -movflags faststart "${video_output_path}.mp4" -hide_banner -loglevel error`;
+
+    let text = ``;
+
+    for (const camName of placeInfo.camNames) {
+      const fileName = `${camName}${isDepthVid ? "_depth" : ""}.png`;
+      text += `file ${fileName}` + "\n";
+      text += `outpoint ${frameDuration}` + "\n";
+
+      ffmpeg.FS("writeFile", fileName, await fetchFile(`./${fileName}`));
+    }
+
+    /*
+file 1.png
+outpoint 5
+file 2.png
+outpoint 2
+*/
+
+    const textFilePath = path.join(folderPath, "in.txt"); // NOTE not needed, it will save to the current path
+
+    await fs.writeFile("in.txt", text);
+    console.log("finished writing file");
+    // ffmpeg.FS("")
+    // ffmpeg.run()
+    ffmpeg.FS("writeFile", "in.txt", await fetchFile("./in.txt"));
+
+    const vidFileName = `${placeName}${isDepthVid ? "_depth" : "_color"}.mp4`;
+
+    await ffmpeg.run(
+      "-f",
+      "concat",
+      "-i",
+      "in.txt",
+      // "file:" + textFilePath,
+      // "-framerate",
+      // "1",
+      "-c:v",
+      "libx264",
+      "-shortest",
+      "-r",
+      "30",
+      "-pix_fmt",
+      "yuv420p",
+      "-vf",
+      "scale=1280:720",
+      vidFileName
+    );
+    // await ffmpeg.run(
+    //   "-framerate",
+    //   `${chosen_framerate}`,
+    //   "-f",
+    //   "image2",
+    //   "-i",
+    //   `${frame_image_path}%04d.png`,
+    //   "-vcodec",
+    //   "libx264",
+    //   "-crf",
+    //   `${video_quality}`,
+    //   "-g",
+    //   `${keyframes}`,
+    //   "-vf",
+    //   `fps=${chosen_framerate}`,
+    //   "format=yuv420p",
+    //   "scale=1280:720",
+    //   "-y",
+    //   "-movflags",
+    //   "faststart",
+    //   `${video_output_path}.mp4`,
+    //   "-hide_banner",
+    //   "-loglevel",
+    //   "error"
+    // );
+
+    ffmpeg.FS("readdir", "./");
+    // await fs.writeFile(
+    //   `./${vidFileName}`,
+    //   ffmpeg.FS("readFile", vidFileName)
+    // );
+    console.log("finished writing video file");
   }
 
-  // close the browser
-  await browser.close();
+  await makeVideoFromPics(false);
+  await makeVideoFromPics(true);
+
+  const combineColorAndDepthVertically =
+    // Join the color and depth vids
+    // NOTE if it uses too much memory, could save each one to a file and combine later :think
+
+    await ffmpeg.run(
+      "-i",
+      `${placeName}_color.mp4`,
+      "-i",
+      `${placeName}_depth.mp4`,
+      "-filter_complex",
+      "vstack=inputs=2",
+      "-vcodec",
+      "libx264",
+      "-crf",
+      `${video_quality}`,
+      "-g",
+      `${keyframes}`,
+      "-y",
+      "-movflags",
+      "faststart",
+      "backdrops.mp4",
+      "-hide_banner",
+      "-loglevel",
+      "error"
+    );
+
+  await fs.writeFile("./backdrops.mp4", ffmpeg.FS("readFile", "backdrops.mp4"));
+
+  ffmpeg.exit();
+
+  // TODO copy to make depth version, and have isDepth as parameter
 })();
