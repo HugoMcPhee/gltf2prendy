@@ -17,6 +17,10 @@ import { Point3D } from "chootils/dist/points3d";
 
 import { writeFile } from "fs/promises";
 import { createFFmpeg, fetchFile } from "@ffmpeg.wasm/main";
+import {
+  makePlaceTypescriptFile,
+  makePlacesTypescriptFile,
+} from "./makeTypescriptFiles";
 
 // function getDistance(value1: Point3D, value2: Point3D): number {
 //   return Math.sqrt(getDistanceSquared(value1, value2));
@@ -95,10 +99,12 @@ declare global {
   }
 }
 
-type PlaceInfo = {
+export type PlaceInfo = {
+  placeName: string;
   camNames: string[];
   triggerNames: string[];
   spotNames: string[];
+  soundspotNames: string[];
   wallNames: string[];
   floorNames: string[];
   // might need extra info about cams etc
@@ -116,6 +122,9 @@ function splitFilePath(fullPathOriginal: string) {
   const parentFolderName = directoryPath.slice(lastDirectorySeparatorIndex + 1); // returns 'to'
   const filename = fullPath.slice(lastSeparatorIndex + 1); // returns 'file.txt'
 
+  console.log("fullPath");
+  console.log(fullPath);
+
   const lastDotIndex = filename.lastIndexOf(".");
   const filenameWithoutExtension = filename.slice(
     lastSeparatorIndex + 1,
@@ -129,6 +138,21 @@ function splitFilePath(fullPathOriginal: string) {
     parentFolderName,
     name: filenameWithoutExtension,
     extension: fileExtension,
+  };
+}
+
+function splitFolderPath(fullPathOriginal: string) {
+  const fullPath = fullPathOriginal.replaceAll("\\", "/");
+  const lastSeparatorIndex = fullPath.lastIndexOf("/");
+  const directoryPath = fullPath.slice(0, lastSeparatorIndex); // returns '/path/to'
+  const lastDirectorySeparatorIndex = directoryPath.lastIndexOf("/");
+  const parentFolderName = directoryPath.slice(lastDirectorySeparatorIndex + 1); // returns 'to'
+  const foldername = fullPath.slice(lastSeparatorIndex + 1); // returns 'file.txt'
+
+  return {
+    foldername,
+    directoryPath,
+    parentFolderName,
   };
 }
 
@@ -156,8 +180,25 @@ const ffmpeg = createFFmpeg({ log: true });
   let placeDetailGlbFile = null as null | Uint8Array;
   let placeDetailGlbPath = "";
 
-  const placeName = splitFilePath(folderPath).filename;
+  const folderPathInfo = splitFolderPath(folderPath);
+  const placeName = folderPathInfo.foldername;
   console.log("placeName", placeName);
+
+  console.log("folderPathInfo");
+  console.log(folderPathInfo);
+
+  // const parentFolder = __dirname + "/../"; // Assuming the parent folder is one level up from the current directory
+  const parentFolder = process.cwd() + "/../"; // Assuming the parent folder is one level up from the current directory
+
+  const parentFolderFiles = await fs.readdir(parentFolder, {
+    withFileTypes: true,
+  });
+
+  const placeNames = parentFolderFiles
+    .filter((file) => file.isDirectory())
+    .map((file) => file.name);
+
+  console.log("Place names:", placeNames);
 
   const placeInfo: PlaceInfo = {
     camNames: [],
@@ -165,6 +206,8 @@ const ffmpeg = createFFmpeg({ log: true });
     spotNames: [],
     triggerNames: [],
     wallNames: [],
+    placeName,
+    soundspotNames: [],
   };
 
   // checks a file or folder and saves the HDR data if it's a HDR file
@@ -944,16 +987,17 @@ const ffmpeg = createFFmpeg({ log: true });
   await ffmpeg.load();
   console.log("ffmpeg loaded");
 
-  const chosen_framerate = 1;
+  const chosenFramerate = 1;
   const frame_image_path = "";
-  const video_quality = 25;
+  const videoQuality = 25;
   const keyframes = 1;
   const video_output_path = "";
 
   async function makeVideoFromPics(isDepthVid: boolean) {
-    const frameDuration = 1; // seconds
+    const frameDuration = 1 + 1; // seconds + 1 frame padding (blender duplicates the last frame after rendering to add padding)
 
     // const makeVideoCommand = `C:\\ffmpeg -framerate ${chosen_framerate} -f image2 -i "${frame_image_path}%04d.png" -vcodec libx264 -crf ${video_quality} -g ${keyframes} -vf "fps=${chosen_framerate},format=yuv420p,scale=1280:720" -y -movflags faststart "${video_output_path}.mp4" -hide_banner -loglevel error`;
+    const makeVideoCommand = `C:\\ffmpeg -framerate ${chosenFramerate} -f image2 -i "${frame_image_path}%04d.png" -vcodec libx264 -crf ${videoQuality} -g ${keyframes} -vf "fps=${chosenFramerate},format=yuv420p,scale=1280:720" -y -movflags faststart "${video_output_path}.mp4" -hide_banner -loglevel error`;
 
     let text = ``;
 
@@ -990,15 +1034,24 @@ outpoint 2
       // "file:" + textFilePath,
       // "-framerate",
       // "1",
-      "-c:v",
+      // "-c:v",
+      // "libx264",
+      "-vcodec",
       "libx264",
-      "-shortest",
-      "-r",
-      "30",
-      "-pix_fmt",
-      "yuv420p",
+      // "-shortest",
+      // "-r",
+      // "30",
+      // "-pix_fmt",
+      // "yuv420p",
       "-vf",
-      "scale=1280:720",
+      `fps=${chosenFramerate},format=yuv420p,scale=1280:720`,
+      "-y",
+      "-movflags",
+      "faststart",
+      "-crf",
+      `${videoQuality}`,
+      "-g",
+      `${keyframes}`,
       vidFileName
     );
     // await ffmpeg.run(
@@ -1052,7 +1105,7 @@ outpoint 2
       "-vcodec",
       "libx264",
       "-crf",
-      `${video_quality}`,
+      `${videoQuality}`,
       "-g",
       `${keyframes}`,
       "-y",
@@ -1068,5 +1121,13 @@ outpoint 2
 
   ffmpeg.exit();
 
-  // TODO copy to make depth version, and have isDepth as parameter
+  const placeTsFile = makePlaceTypescriptFile(placeInfo);
+  // await fs.writeFile(placeInfo.placeName + ".ts", placeTsFile);
+  await fs.writeFile("index.ts", placeTsFile);
+  console.log("finsihed writing place txt file");
+
+  const placesTsFile = makePlacesTypescriptFile(placeNames);
+  await fs.writeFile("../places.ts", placesTsFile);
+  console.log("finsihed writing places txt file");
+  // go to parent folder and write the places file
 })();
