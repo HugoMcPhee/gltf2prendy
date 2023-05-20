@@ -1006,6 +1006,14 @@ const ffmpeg = createFFmpeg({ log: true });
       text += `file ${fileName}` + "\n";
       text += `outpoint ${frameDuration}` + "\n";
 
+      const isLastCam =
+        camName === placeInfo.camNames[placeInfo.camNames.length - 1];
+      // for some reason, ffmpeg cuts off the last frame? so we add an extra frame to the end
+      if (isLastCam) {
+        text += `file ${fileName}` + "\n";
+        text += `outpoint ${frameDuration}` + "\n";
+      }
+
       ffmpeg.FS("writeFile", fileName, await fetchFile(`./${fileName}`));
     }
 
@@ -1034,12 +1042,15 @@ outpoint 2
       // "file:" + textFilePath,
       // "-framerate",
       // "1",
+      "-framerate",
+      `${chosenFramerate}`,
       // "-c:v",
       // "libx264",
       "-vcodec",
       "libx264",
       // "-shortest",
-      // "-r",
+      "-r",
+      `${chosenFramerate}`,
       // "30",
       // "-pix_fmt",
       // "yuv420p",
@@ -1081,10 +1092,7 @@ outpoint 2
     // );
 
     ffmpeg.FS("readdir", "./");
-    // await fs.writeFile(
-    //   `./${vidFileName}`,
-    //   ffmpeg.FS("readFile", vidFileName)
-    // );
+    // await fs.writeFile(`./${vidFileName}`, ffmpeg.FS("readFile", vidFileName));
     console.log("finished writing video file");
   }
 

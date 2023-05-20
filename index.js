@@ -708,6 +708,12 @@ const ffmpeg = (0, main_1.createFFmpeg)({ log: true });
             const fileName = `${camName}${isDepthVid ? "_depth" : ""}.png`;
             text += `file ${fileName}` + "\n";
             text += `outpoint ${frameDuration}` + "\n";
+            const isLastCam = camName === placeInfo.camNames[placeInfo.camNames.length - 1];
+            // for some reason, ffmpeg cuts off the last frame? so we add an extra frame to the end
+            if (isLastCam) {
+                text += `file ${fileName}` + "\n";
+                text += `outpoint ${frameDuration}` + "\n";
+            }
             ffmpeg.FS("writeFile", fileName, await (0, main_1.fetchFile)(`./${fileName}`));
         }
         /*
@@ -727,11 +733,12 @@ const ffmpeg = (0, main_1.createFFmpeg)({ log: true });
         // "file:" + textFilePath,
         // "-framerate",
         // "1",
+        "-framerate", `${chosenFramerate}`, 
         // "-c:v",
         // "libx264",
         "-vcodec", "libx264", 
         // "-shortest",
-        // "-r",
+        "-r", `${chosenFramerate}`, 
         // "30",
         // "-pix_fmt",
         // "yuv420p",
@@ -762,10 +769,7 @@ const ffmpeg = (0, main_1.createFFmpeg)({ log: true });
         //   "error"
         // );
         ffmpeg.FS("readdir", "./");
-        // await fs.writeFile(
-        //   `./${vidFileName}`,
-        //   ffmpeg.FS("readFile", vidFileName)
-        // );
+        await promises_1.default.writeFile(`./${vidFileName}`, ffmpeg.FS("readFile", vidFileName));
         console.log("finished writing video file");
     }
     await makeVideoFromPics(false);
