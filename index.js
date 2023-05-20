@@ -299,7 +299,9 @@ const ffmpeg = (0, main_1.createFFmpeg)({ log: true });
     // udpate the cameras min and maxZ based on the distances (NOTE may need to to this later from babylonjs! and return the values)
     // Write. // NOTE move this to below the babylonjs parts
     // NOTE won't work is _detail is writtern somewhere else, it might be better to build the new path from the placename
-    await io.write(placeDetailGlbPath?.replace("_detail", "_edited"), gltfDocument); // → void
+    await io.write(
+    // placeDetailGlbPath?.replace("_detail", "_edited"),
+    placeDetailGlbPath?.replace("_detail", ""), gltfDocument); // → void
     // const newGlb = await io.writeBinary(gltfDocument); // Document → Uint8Array
     // ------------------------------------------------
     // Render pics in babylonjs
@@ -769,7 +771,7 @@ const ffmpeg = (0, main_1.createFFmpeg)({ log: true });
         //   "error"
         // );
         ffmpeg.FS("readdir", "./");
-        await promises_1.default.writeFile(`./${vidFileName}`, ffmpeg.FS("readFile", vidFileName));
+        // await fs.writeFile(`./${vidFileName}`, ffmpeg.FS("readFile", vidFileName));
         console.log("finished writing video file");
     }
     await makeVideoFromPics(false);

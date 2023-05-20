@@ -418,7 +418,8 @@ const ffmpeg = createFFmpeg({ log: true });
   // Write. // NOTE move this to below the babylonjs parts
   // NOTE won't work is _detail is writtern somewhere else, it might be better to build the new path from the placename
   await io.write(
-    placeDetailGlbPath?.replace("_detail", "_edited"),
+    // placeDetailGlbPath?.replace("_detail", "_edited"),
+    placeDetailGlbPath?.replace("_detail", ""),
     gltfDocument
   ); // → void
   // const newGlb = await io.writeBinary(gltfDocument); // Document → Uint8Array
