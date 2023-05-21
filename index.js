@@ -776,6 +776,9 @@ const ffmpeg = (0, main_1.createFFmpeg)({ log: true });
     }
     await makeVideoFromPics(false);
     await makeVideoFromPics(true);
+    console.log("deleting in.txt");
+    await promises_1.default.unlink("in.txt");
+    console.log("deleted in.txt");
     const combineColorAndDepthVertically = 
     // Join the color and depth vids
     // NOTE if it uses too much memory, could save each one to a file and combine later :think

@@ -1100,6 +1100,10 @@ outpoint 2
   await makeVideoFromPics(false);
   await makeVideoFromPics(true);
 
+  console.log("deleting in.txt");
+  await fs.unlink("in.txt");
+  console.log("deleted in.txt");
+
   const combineColorAndDepthVertically =
     // Join the color and depth vids
     // NOTE if it uses too much memory, could save each one to a file and combine later :think
