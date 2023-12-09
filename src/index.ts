@@ -354,6 +354,7 @@ const ffmpeg = createFFmpeg({ log: true });
         }
       } else if (nodeName === "details") {
         // find the details node and delete it
+        transformNode.listChildren().forEach((item) => item.dispose());
         transformNode.dispose();
       }
     }
@@ -427,7 +428,7 @@ const ffmpeg = createFFmpeg({ log: true });
   // ------------------------------------------------
   // Render pics in babylonjs
   // ------------------------------------------------
-  if (false) {
+  if (true) {
     // Reccomended pupeteer args by babylonjs, not used yet
     // Don't disable the gpu
     let args = puppeteer.defaultArgs().filter((arg) => arg !== "--disable-gpu");
