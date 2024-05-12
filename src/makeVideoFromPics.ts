@@ -22,22 +22,22 @@ export async function makeVideoFromPics(
   // const makeVideoCommand = `C:\\ffmpeg -framerate ${chosen_framerate} -f image2 -i "${frame_image_path}%04d.png" -vcodec libx264 -crf ${video_quality} -g ${keyframes} -vf "fps=${chosen_framerate},format=yuv420p,scale=1280:720" -y -movflags faststart "${video_output_path}.mp4" -hide_banner -loglevel error`;
   const makeVideoCommand = `C:\\ffmpeg -framerate ${chosenFramerate} -f image2 -i "${frame_image_path}%04d.png" -vcodec libx264 -crf ${videoQuality} -g ${keyframes} -vf "fps=${chosenFramerate},format=yuv420p,scale=1280:720" -y -movflags faststart "${video_output_path}.mp4" -hide_banner -loglevel error`;
 
-  let text = ``;
+  let inFileText = ``;
 
   for (const camName of placeInfo.camNames) {
     const fileName = `${camName}${isDepthVid ? "_depth" : ""}.png`;
-    text += `file ${fileName}` + "\n";
-    text += `outpoint ${frameDuration}` + "\n";
+    inFileText += `file ${fileName}` + "\n";
+    inFileText += `outpoint ${frameDuration}` + "\n";
 
-    const isLastCam =
-      camName === placeInfo.camNames[placeInfo.camNames.length - 1];
+    const isLastCam = camName === placeInfo.camNames[placeInfo.camNames.length - 1];
     // for some reason, ffmpeg cuts off the last frame? so we add an extra frame to the end
     if (isLastCam) {
-      text += `file ${fileName}` + "\n";
-      text += `outpoint ${frameDuration}` + "\n";
+      inFileText += `file ${fileName}` + "\n";
+      inFileText += `outpoint ${frameDuration}` + "\n";
     }
 
-    ffmpeg.FS("writeFile", fileName, await fetchFile(`./${fileName}`));
+    ffmpeg.FS("writeFile", fileName, await fetchFile(`./renders/${fileName}`));
+    // ffmpeg.FS("writeFile", fileName, await fetchFile(`./${fileName}`));
   }
 
   /*
@@ -49,7 +49,7 @@ outpoint 2
 
   const textFilePath = path.join(folderPath, "in.txt"); // NOTE not needed, it will save to the current path
 
-  await fs.writeFile("in.txt", text);
+  await fs.writeFile("in.txt", inFileText);
   console.log("finished writing file");
   // ffmpeg.FS("")
   // ffmpeg.run()

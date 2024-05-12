@@ -79,10 +79,10 @@ export async function renderPlaceInBabylon({
 
   for (const camName of camNames ?? []) {
     await page.evaluate(getCameraColorScreenshot, camName);
-    await page.screenshot({ path: `./${camName}.png`, fullPage: true });
+    await page.screenshot({ path: `./renders/${camName}.png`, fullPage: true });
 
     await page.evaluate(getCameraDepthScreenshot, camName);
-    await page.screenshot({ path: `./${camName}_depth.png`, fullPage: true });
+    await page.screenshot({ path: `./renders/${camName}_depth.png`, fullPage: true });
   }
 
   // ------------------------------------------------
