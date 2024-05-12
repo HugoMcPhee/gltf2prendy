@@ -1,13 +1,17 @@
 import puppeteer from "puppeteer";
-import { GltfFilesData, PlaceInfo } from ".";
+import { GltfFilesData, PlaceInfo, PointsInfo } from ".";
 import { getCameraColorScreenshot, getCameraDepthScreenshot } from "./browser/getScreenshots";
+import delay from "delay";
+import { getCharacterVisibilityData } from "./browser/getCharacterVisiblityData";
 
 export async function renderPlaceInBabylon({
   gltfFilesData,
   placeInfo,
+  pointsInfo,
 }: {
   gltfFilesData: GltfFilesData;
   placeInfo: PlaceInfo;
+  pointsInfo: PointsInfo;
 }) {
   // Reccomended pupeteer args by babylonjs, not used yet
   // Don't disable the gpu
@@ -81,9 +85,12 @@ export async function renderPlaceInBabylon({
     await page.evaluate(getCameraColorScreenshot, camName);
     await page.screenshot({ path: `./renders/${camName}.png`, fullPage: true });
 
+    // Maybe something in here sets it up so the other one works better
     await page.evaluate(getCameraDepthScreenshot, camName);
     await page.screenshot({ path: `./renders/${camName}_depth.png`, fullPage: true });
   }
+
+  await page.evaluate(getCharacterVisibilityData, placeInfo, pointsInfo);
 
   // ------------------------------------------------
   // Create videos from pic renders

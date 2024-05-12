@@ -17,10 +17,13 @@ export function setUpBabylonScene() {
     preserveDrawingBuffer: true,
     stencil: true,
     premultipliedAlpha: false,
+    antialias: false,
   });
   pageRefs.engine = engine;
+  pageRefs.canvas = canvas;
 
   const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0, 0, 0, 1); // RGBA where R, G, B are 0 for black and A (alpha) is 1 for fully opaque
 
   pageRefs.scene = scene;
 

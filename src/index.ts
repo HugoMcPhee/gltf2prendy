@@ -5,6 +5,7 @@ import {
   AssetContainer,
   Camera,
   Engine,
+  Mesh,
   PBRMaterial,
   PostProcess,
   Scene,
@@ -29,6 +30,10 @@ import { makeVideoFromPics } from "./makeVideoFromPics";
 import { splitFolderPath } from "./paths";
 import { readAndSavePlaceGltf } from "./readAndSavePlaceGltf";
 import { renderPlaceInBabylon } from "./renderPlaceInBabylon";
+import { countWhitePixels } from "./browser/countWhitePixels";
+import { generateFloorPoints } from "./browser/findPointsOnFloors";
+import { setupFakeCharacter } from "./browser/setupFakeCharacter";
+import { applyBlackMaterialToDetails } from "./browser/applyBlackMaterialToDetails";
 
 type ModelFile = {
   meshes: Record<string, AbstractMesh>;
@@ -49,6 +54,7 @@ type PageRefs = {
   modelFile?: ModelFile;
   depthPostProcess?: PostProcess;
   placeDetailGlbPath?: string;
+  fakeCharacter?: Mesh;
   // imports for browser
   delay: (time: number) => Promise<void>;
   forEach: typeof forEach;
@@ -60,6 +66,10 @@ type PageRefs = {
   handleGltfModel: typeof handleGltfModel;
   waitForSceneReady: typeof waitForSceneReady;
   setUpBabylonScene: typeof setUpBabylonScene;
+  countWhitePixels: typeof countWhitePixels;
+  setupFakeCharacter: typeof setupFakeCharacter;
+  generateFloorPoints: typeof generateFloorPoints;
+  applyBlackMaterialToDetails: typeof applyBlackMaterialToDetails;
 };
 
 export const nodeRefs = {
@@ -82,6 +92,16 @@ export type PlaceInfo = {
   floorNames: string[];
   // might need extra info about cams etc
 };
+
+export type PointsInfo = Record<
+  string,
+  {
+    point: [number, number, number];
+    camInfos: Record<string, { visiblePixels: number; fullCharacterPixels: number; charcterDistance: number }>;
+    bestCam1: string;
+    bestCam2: string;
+  }
+>;
 
 export type HDRFileProbeData = { name: string; data: string };
 export type EnvFileData = { name: string; data: string | ArrayBuffer | null };
@@ -128,6 +148,8 @@ const ffmpeg = createFFmpeg({ log: true });
     soundspotNames: [],
   };
 
+  const pointsInfo = {} as PointsInfo;
+
   await checkFiles({
     folderPath,
     gltfFilesData,
@@ -153,7 +175,7 @@ const ffmpeg = createFFmpeg({ log: true });
   // Render pics in babylonjs
   // ------------------------------------------------
 
-  await renderPlaceInBabylon({ placeInfo, gltfFilesData });
+  await renderPlaceInBabylon({ placeInfo, gltfFilesData, pointsInfo });
 
   // find the images and load into ffmpeg stuff
   await ffmpeg.load();

@@ -1,7 +1,8 @@
-import { Engine, Scene, ShaderStore } from "@babylonjs/core";
-import { loadModelFile } from "./loadModelFile";
-import { shaders } from "./shaders";
+import { ShaderStore } from "@babylonjs/core";
 import { PlaceInfo } from "..";
+import { loadModelFile } from "./loadModelFile";
+import { setupFakeCharacter } from "./setupFakeCharacter";
+import { shaders } from "./shaders";
 
 export async function setUpPlaceForRendering({
   modelFile,
@@ -19,6 +20,8 @@ export async function setUpPlaceForRendering({
   modelFile.transformNodes.walls?.setEnabled(false);
   modelFile.transformNodes.triggers?.setEnabled(false);
   modelFile.transformNodes.floors?.setEnabled(false);
+
+  window.pageRefs.modelFile = modelFile;
 
   // const camNames = Object.keys(modelFile.cameras);
   for (const camName of placeInfo.camNames) {

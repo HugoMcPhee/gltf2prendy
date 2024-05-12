@@ -6,16 +6,21 @@ import {
   AnimationGroup,
   AssetContainer,
   Camera,
+  Color3,
+  Color4,
   DepthRenderer,
   Engine,
   FreeCamera,
   HemisphericLight,
+  MeshBuilder,
   PBRMaterial,
   PostProcess,
+  Ray,
   Scene,
   SceneLoader,
   ShaderStore,
   Skeleton,
+  StandardMaterial,
   Texture,
   TransformNode,
   Vector3,
@@ -27,6 +32,10 @@ import { loadModelFile } from "./loadModelFile";
 import { setUpBabylonScene } from "./setUpBabylonScene";
 import { shaders } from "./shaders";
 import { waitForSceneReady } from "./waitForSceneReady";
+import { generateFloorPoints } from "./findPointsOnFloors";
+import { countWhitePixels } from "./countWhitePixels";
+import { setupFakeCharacter } from "./setupFakeCharacter";
+import { applyBlackMaterialToDetails } from "./applyBlackMaterialToDetails";
 
 // Expose everything on window.pageRefs
 
@@ -48,6 +57,11 @@ export const BABYLON = {
   SceneLoader,
   ShaderStore,
   DepthRenderer,
+  MeshBuilder,
+  Color3,
+  Color4,
+  StandardMaterial,
+  Ray,
 };
 
 export const pageRefs = {
@@ -60,6 +74,10 @@ export const pageRefs = {
   handleGltfModel,
   waitForSceneReady,
   setUpBabylonScene,
+  generateFloorPoints,
+  countWhitePixels,
+  setupFakeCharacter,
+  applyBlackMaterialToDetails,
   delay: async (time: number) => new Promise((resolve) => setTimeout(resolve, time)),
 };
 
