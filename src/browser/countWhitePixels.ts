@@ -8,7 +8,7 @@ import { Scene } from "@babylonjs/core";
  */
 export async function countWhitePixels(scene: Scene): Promise<number> {
   // Ensure the scene is rendered to update the canvas
-  scene.render();
+  // scene.render();
 
   const engine = scene.getEngine();
   const width = engine.getRenderWidth();

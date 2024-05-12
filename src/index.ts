@@ -34,6 +34,7 @@ import { countWhitePixels } from "./browser/countWhitePixels";
 import { generateFloorPoints } from "./browser/findPointsOnFloors";
 import { setupFakeCharacter } from "./browser/setupFakeCharacter";
 import { applyBlackMaterialToDetails } from "./browser/applyBlackMaterialToDetails";
+import { getFovScaleFactor } from "./browser/getFovScaleFactor";
 
 type ModelFile = {
   meshes: Record<string, AbstractMesh>;
@@ -70,6 +71,7 @@ type PageRefs = {
   setupFakeCharacter: typeof setupFakeCharacter;
   generateFloorPoints: typeof generateFloorPoints;
   applyBlackMaterialToDetails: typeof applyBlackMaterialToDetails;
+  getFovScaleFactor: typeof getFovScaleFactor;
 };
 
 export const nodeRefs = {
@@ -97,7 +99,7 @@ export type PointsInfo = Record<
   string,
   {
     point: [number, number, number];
-    camInfos: Record<string, { visiblePixels: number; fullCharacterPixels: number; charcterDistance: number }>;
+    camInfos: Record<string, { charScreenAmount: number; charVisibleAmount: number; charcterDistance: number }>;
     bestCam1: string;
     bestCam2: string;
   }

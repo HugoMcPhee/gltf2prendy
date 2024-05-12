@@ -81,13 +81,15 @@ export async function renderPlaceInBabylon({
   // for some reason, the first cam doesn't get all objects rendered, but rendering again fixes it
   camNames.unshift(camNames[0]);
 
-  for (const camName of camNames ?? []) {
-    await page.evaluate(getCameraColorScreenshot, camName);
-    await page.screenshot({ path: `./renders/${camName}.png`, fullPage: true });
+  if (false) {
+    for (const camName of camNames ?? []) {
+      await page.evaluate(getCameraColorScreenshot, camName);
+      await page.screenshot({ path: `./renders/${camName}.png`, fullPage: true });
 
-    // Maybe something in here sets it up so the other one works better
-    await page.evaluate(getCameraDepthScreenshot, camName);
-    await page.screenshot({ path: `./renders/${camName}_depth.png`, fullPage: true });
+      // Maybe something in here sets it up so the other one works better
+      await page.evaluate(getCameraDepthScreenshot, camName);
+      await page.screenshot({ path: `./renders/${camName}_depth.png`, fullPage: true });
+    }
   }
 
   await page.evaluate(getCharacterVisibilityData, placeInfo, pointsInfo);

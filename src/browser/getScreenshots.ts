@@ -8,6 +8,9 @@ export async function getCameraColorScreenshot(camName: string) {
 
   const { modelFile, delay, engine, scene, countWhitePixels } = window.pageRefs;
   if (!delay || !modelFile || !engine || !scene) return;
+  const detailsNode = modelFile.transformNodes.details;
+  detailsNode.setEnabled(true);
+
   const camera = modelFile.cameras[camName];
   if (!camera) return;
 
