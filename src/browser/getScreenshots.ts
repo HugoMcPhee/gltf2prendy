@@ -23,7 +23,7 @@ export async function getCameraColorScreenshot(camName: string) {
   scene.render();
 
   // allow some time for rendering
-  await delay(50);
+  await delay(10);
 
   // set cameras view distance back to their original
   camera.minZ = originalMinZ;

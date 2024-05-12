@@ -1,3 +1,4 @@
+import { DepthRenderer } from "@babylonjs/core";
 import { PlaceInfo, PointsInfo } from "..";
 
 export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInfo: PointsInfo) {
@@ -31,7 +32,13 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
 
   const camNames = placeInfo.camNames;
 
+  // Loop through points on the floor (pointsOnFloor) and set up the pointInfo object
+  // where the key is xyz combined as a string, and the value is an object
+  // with the point, bestCam1, and bestCam2 properties
   for (const camName of camNames) {
+    // Loop through the camNames and set up the camInfos object
+    // where the key is the camName and the value is an object with
+    // visiblePixels, fullCharacterPixels, and characterDistance properties
     // remove the old depth postProcess
     window.pageRefs.depthPostProcess?.dispose();
 
@@ -48,22 +55,56 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     camera.maxZ = 10000;
     scene.activeCamera = camera;
 
-    scene.render();
+    for (const vectorPoint of pointsOnFloor) {
+      const { x: realX, y: realY, z: realZ } = vectorPoint;
 
-    // allow some time for rendering
-    await delay(50);
+      // make x y and z limited to 3 decimal places
+      const x = Math.round(realX * 1000) / 1000;
+      const y = Math.round(realY * 1000) / 1000;
+      const z = Math.round(realZ * 1000) / 1000;
+
+      const pointInfoKey = `${x},${y},${z}`;
+      if (!pointsInfo[pointInfoKey]) {
+        pointsInfo[pointInfoKey] = {
+          point: [x, y, z],
+          camInfos: {},
+          bestCam1: "",
+          bestCam2: "",
+        };
+      }
+
+      const fakeCharacter = window.pageRefs.fakeCharacter;
+      if (!fakeCharacter) return;
+
+      // set the character position to the current point
+      fakeCharacter?.position.set(x, y, z);
+
+      const cameraDistanceToCharacter = BABYLON.Vector3.Distance(camera.position, fakeCharacter.position);
+
+      scene.render();
+
+      // allow some time for rendering
+      await delay(1);
+
+      const whitePixels = await countWhitePixels(scene);
+      pointsInfo[pointInfoKey].camInfos[camName] = {
+        charcterDistance: cameraDistanceToCharacter,
+        fullCharacterPixels: whitePixels,
+        visiblePixels: 0,
+      };
+
+      //   console.log("whitePixels", camName, whitePixels);
+      console.log("whitePixels", whitePixels);
+    }
 
     // set cameras view distance back to their original
     camera.minZ = originalMinZ;
     camera.maxZ = originalMaxZ;
-
-    const whitePixels = await countWhitePixels(scene);
-
-    await delay(2000);
-
-    //   console.log("whitePixels", camName, whitePixels);
-    console.log("whitePixels", whitePixels);
   }
 
-  await delay(5000);
+  console.log("pointsInfo");
+  console.log(pointsInfo);
+  //   console.log(JSON.stringify(pointsInfo, null, 2));
+
+  //   await delay(30000);
 }
