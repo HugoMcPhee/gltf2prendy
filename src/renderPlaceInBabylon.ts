@@ -43,7 +43,7 @@ export async function renderPlaceInBabylon({
 
   // Inject the compiled browser bundle
   await page.addScriptTag({
-    path: __dirname + "/browser.bundle.js",
+    path: __dirname + "/browser.js",
     type: "module",
   });
 
