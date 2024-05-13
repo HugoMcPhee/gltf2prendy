@@ -35,6 +35,7 @@ import { generateFloorPoints } from "./browser/findPointsOnFloors";
 import { setupFakeCharacter } from "./browser/setupFakeCharacter";
 import { applyBlackMaterialToDetails } from "./browser/applyBlackMaterialToDetails";
 import { getFovScaleFactor } from "./browser/getFovScaleFactor";
+import { calculateCameraScore } from "./browser/calculateCameraScore";
 
 type ModelFile = {
   meshes: Record<string, AbstractMesh>;
@@ -72,6 +73,7 @@ type PageRefs = {
   generateFloorPoints: typeof generateFloorPoints;
   applyBlackMaterialToDetails: typeof applyBlackMaterialToDetails;
   getFovScaleFactor: typeof getFovScaleFactor;
+  calculateCameraScore: typeof calculateCameraScore;
 };
 
 export const nodeRefs = {
@@ -99,7 +101,7 @@ export type PointsInfo = Record<
   string,
   {
     point: [number, number, number];
-    camInfos: Record<string, { charScreenAmount: number; charVisibleAmount: number; charcterDistance: number }>;
+    camInfos: Record<string, { screenCoverage: number; visibilityScore: number; charcterDistance: number }>;
     bestCam1: string;
     bestCam2: string;
   }
@@ -179,57 +181,59 @@ const ffmpeg = createFFmpeg({ log: true });
 
   await renderPlaceInBabylon({ placeInfo, gltfFilesData, pointsInfo });
 
-  // find the images and load into ffmpeg stuff
-  await ffmpeg.load();
+  if (false) {
+    // find the images and load into ffmpeg stuff
+    await ffmpeg.load();
 
-  const videoQuality = 25;
-  const keyframes = 1;
+    const videoQuality = 25;
+    const keyframes = 1;
 
-  await makeVideoFromPics(false, placeInfo, ffmpeg, folderPath, placeName);
-  await makeVideoFromPics(true, placeInfo, ffmpeg, folderPath, placeName);
+    await makeVideoFromPics(false, placeInfo, ffmpeg, folderPath, placeName);
+    await makeVideoFromPics(true, placeInfo, ffmpeg, folderPath, placeName);
 
-  // Delete in.txt
-  await fs.unlink("in.txt");
+    // Delete in.txt
+    await fs.unlink("in.txt");
 
-  // const combineColorAndDepthVertically =
-  // Join the color and depth vids
-  // NOTE if it uses too much memory, could save each one to a file and combine later :think
+    // const combineColorAndDepthVertically =
+    // Join the color and depth vids
+    // NOTE if it uses too much memory, could save each one to a file and combine later :think
 
-  // Combine Color And Depth Vertically
+    // Combine Color And Depth Vertically
 
-  await ffmpeg.run(
-    "-i",
-    `${placeName}_color.mp4`,
-    "-i",
-    `${placeName}_depth.mp4`,
-    "-filter_complex",
-    "vstack=inputs=2",
-    "-vcodec",
-    "libx264",
-    "-crf",
-    `${videoQuality}`,
-    "-g",
-    `${keyframes}`,
-    "-y",
-    "-movflags",
-    "faststart",
-    "backdrops.mp4",
-    "-hide_banner",
-    "-loglevel",
-    "error"
-  );
+    await ffmpeg.run(
+      "-i",
+      `${placeName}_color.mp4`,
+      "-i",
+      `${placeName}_depth.mp4`,
+      "-filter_complex",
+      "vstack=inputs=2",
+      "-vcodec",
+      "libx264",
+      "-crf",
+      `${videoQuality}`,
+      "-g",
+      `${keyframes}`,
+      "-y",
+      "-movflags",
+      "faststart",
+      "backdrops.mp4",
+      "-hide_banner",
+      "-loglevel",
+      "error"
+    );
 
-  await fs.writeFile("./backdrops.mp4", ffmpeg.FS("readFile", "backdrops.mp4"));
+    await fs.writeFile("./backdrops.mp4", ffmpeg.FS("readFile", "backdrops.mp4"));
 
-  ffmpeg.exit();
+    ffmpeg.exit();
 
-  const placeTsFile = makePlaceTypescriptFile(placeInfo);
-  // await fs.writeFile(placeInfo.placeName + ".ts", placeTsFile);
-  await fs.writeFile("index.ts", placeTsFile);
-  console.log("finsihed writing place txt file");
+    const placeTsFile = makePlaceTypescriptFile(placeInfo);
+    // await fs.writeFile(placeInfo.placeName + ".ts", placeTsFile);
+    await fs.writeFile("index.ts", placeTsFile);
+    console.log("finsihed writing place txt file");
 
-  const placesTsFile = makePlacesTypescriptFile(placeNames);
-  await fs.writeFile("../places.ts", placesTsFile);
-  console.log("finsihed writing places txt file");
+    const placesTsFile = makePlacesTypescriptFile(placeNames);
+    await fs.writeFile("../places.ts", placesTsFile);
+    console.log("finsihed writing places txt file");
+  }
   // go to parent folder and write the places file
 })();

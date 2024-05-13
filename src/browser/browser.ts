@@ -15,6 +15,7 @@ import {
   MeshBuilder,
   PBRMaterial,
   PostProcess,
+  Quaternion,
   Ray,
   Scene,
   SceneLoader,
@@ -24,6 +25,7 @@ import {
   Texture,
   TransformNode,
   Vector3,
+  ArcRotateCamera,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { getFileFromBase64 } from "./getFileFromBase64";
@@ -37,6 +39,7 @@ import { countWhitePixels } from "./countWhitePixels";
 import { setupFakeCharacter } from "./setupFakeCharacter";
 import { applyBlackMaterialToDetails } from "./applyBlackMaterialToDetails";
 import { getFovScaleFactor } from "./getFovScaleFactor";
+import { calculateCameraScore } from "./calculateCameraScore";
 
 // Expose everything on window.pageRefs
 
@@ -53,6 +56,7 @@ export const BABYLON = {
   Scene,
   PostProcess,
   FreeCamera,
+  ArcRotateCamera,
   Vector3,
   HemisphericLight,
   SceneLoader,
@@ -63,6 +67,7 @@ export const BABYLON = {
   Color4,
   StandardMaterial,
   Ray,
+  Quaternion,
 };
 
 export const pageRefs = {
@@ -80,6 +85,7 @@ export const pageRefs = {
   setupFakeCharacter,
   applyBlackMaterialToDetails,
   getFovScaleFactor,
+  calculateCameraScore,
   delay: async (time: number) => new Promise((resolve) => setTimeout(resolve, time)),
 };
 
