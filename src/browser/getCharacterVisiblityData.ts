@@ -31,7 +31,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
 
   const pointsOnFloor = await generateFloorPoints(5);
 
-  const TEST_POINT_INFO_KEY = "-12.242,-0.033,3.838";
+  const TEST_POINT_INDEX = 8;
 
   const camNames = placeInfo.camNames;
   for (const camName of camNames) {
@@ -48,11 +48,14 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     camera.maxZ = 10000;
     scene.activeCamera = camera;
 
+    let vectorPointIndex = -1;
     for (const vectorPoint of pointsOnFloor) {
       const { x: realX, y: realY, z: realZ } = vectorPoint;
       const x = Math.round(realX * 1000) / 1000;
       const y = Math.round(realY * 1000) / 1000;
       const z = Math.round(realZ * 1000) / 1000;
+
+      vectorPointIndex += 1;
 
       const pointInfoKey = `${x},${y},${z}`;
 
@@ -152,20 +155,21 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
 
       //   await delay(1);
 
-      if (pointInfoKey === TEST_POINT_INFO_KEY) {
+      if (vectorPointIndex === TEST_POINT_INDEX) {
         console.log("WAITING");
+        console.log("vectorPointIndex", vectorPointIndex);
 
         // await delay(2000);
       }
 
-      if (pointInfoKey === TEST_POINT_INFO_KEY) {
+      if (vectorPointIndex === TEST_POINT_INDEX) {
         let updatedCamZoom = 1;
 
         // do a loop and await delay inside until originalCamZoom is 0.75
         while (updatedCamZoom > 0.75) {
           //   await delay(1);
           //   console.log("originalCamZoom", originalCamZoom);
-          updatedCamZoom -= 0.001;
+          updatedCamZoom -= 0.0015;
           updateCameraZoom(updatedCamZoom);
           scene.render();
 
@@ -196,7 +200,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       const visibilityScore = characterFullPotentialPixels === 0 ? 0 : scaledWhitePixels / characterFullPotentialPixels;
       pointsInfo[pointInfoKey].camInfos[camName].visibilityScore = visibilityScore; // Inverted as per the definition
 
-      if (pointInfoKey === TEST_POINT_INFO_KEY) {
+      if (vectorPointIndex === TEST_POINT_INDEX) {
         console.log("zoom in", scaledWhitePixels, "zoom out", characterFullPotentialPixels, "factor", fovScaleFactor);
 
         // console.log("visibilityScore", visibilityScore, "charScreenAmount", screenCoverage);
