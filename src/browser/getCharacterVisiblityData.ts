@@ -32,6 +32,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
   const pointsOnFloor = await generateFloorPoints(5);
 
   const TEST_POINT_INDEX = 8;
+  const ZOOM_OUT_REVEAL_AMOUNT = 0.55;
 
   const camNames = placeInfo.camNames;
   for (const camName of camNames) {
@@ -163,30 +164,44 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       }
 
       if (vectorPointIndex === TEST_POINT_INDEX) {
+        // modelFile.transformNodes.details.setEnabled(false);
+
+        // let updatedCamZoom = ZOOM_OUT_REVEAL_AMOUNT;
+        // while (updatedCamZoom < 1) {
+        //   //   await delay(1);
+        //   //   console.log("originalCamZoom", originalCamZoom);
+        //   updatedCamZoom += 0.0045;
+        //   updateCameraZoom(updatedCamZoom);
+        //   scene.render();
+
+        //   await delay(1);
+        // }
+
+        // modelFile.transformNodes.details.setEnabled(true);
         let updatedCamZoom = 1;
 
-        // do a loop and await delay inside until originalCamZoom is 0.75
-        while (updatedCamZoom > 0.75) {
+        // do a loop and await delay inside until originalCamZoom is ZOOM_OUT_REVEAL_AMOUNT
+        while (updatedCamZoom > ZOOM_OUT_REVEAL_AMOUNT) {
           //   await delay(1);
           //   console.log("originalCamZoom", originalCamZoom);
-          updatedCamZoom -= 0.0015;
+          updatedCamZoom -= 0.0025;
           updateCameraZoom(updatedCamZoom);
           scene.render();
 
-          await delay(3);
+          await delay(1);
         }
       }
       modelFile.transformNodes.details.setEnabled(false);
 
       // Second render
-      updateCameraZoom(0.75);
+      updateCameraZoom(ZOOM_OUT_REVEAL_AMOUNT);
       //   camera.fov = secondRenderFov;
       modelFile.transformNodes.details.setEnabled(false);
       scene.render();
       const characterFullPotentialPixels = await countWhitePixels(scene);
       const fovScaleFactor = getFovScaleFactor(initialFov, camera.fov);
 
-      //   await delay(1);
+      await delay(1);
 
       // Reset state
       modelFile.transformNodes.details.setEnabled(true);
