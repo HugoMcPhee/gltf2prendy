@@ -1,5 +1,6 @@
-import { DepthRenderer, FreeCamera } from "@babylonjs/core";
+import { DepthRenderer, FreeCamera, Vector3 } from "@babylonjs/core";
 import { PlaceInfo, PointsInfo } from "..";
+import { Vector } from "babylonjs/Maths/index";
 
 export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInfo: PointsInfo) {
   const {
@@ -14,8 +15,20 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     applyBlackMaterialToDetails,
     getFovScaleFactor,
     waitForSceneReady,
+    calculateCameraScore,
+    createVisualMarker,
+    calculateRelativeDistanceScores,
   } = window.pageRefs;
   if (!scene || !modelFile || !BABYLON || !canvas) return;
+
+  function getKeyFromPoint(vectorPoint: Vector3) {
+    const { x: realX, y: realY, z: realZ } = vectorPoint;
+    const x = Math.round(realX * 1000) / 1000;
+    const y = Math.round(realY * 1000) / 1000;
+    const z = Math.round(realZ * 1000) / 1000;
+    const pointInfoKey = `${x},${y},${z}`;
+    return pointInfoKey;
+  }
 
   await waitForSceneReady(scene);
 
@@ -29,9 +42,10 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
 
   const totalPixelsAmount = engine.getRenderWidth() * engine.getRenderHeight();
 
-  const pointsOnFloor = await generateFloorPoints(5);
+  const pointsOnFloor = await generateFloorPoints(3);
 
-  const TEST_POINT_INDEX = 8;
+  //   const TEST_POINT_INDEX = 8;
+  const TEST_POINT_INDEX = -1;
   const ZOOM_OUT_REVEAL_AMOUNT = 0.55;
 
   const camNames = placeInfo.camNames;
@@ -58,7 +72,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
 
       vectorPointIndex += 1;
 
-      const pointInfoKey = `${x},${y},${z}`;
+      const pointInfoKey = getKeyFromPoint(vectorPoint);
 
       //   console.log("pointInfoKey", pointInfoKey);
 
@@ -67,7 +81,13 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       }
 
       if (!pointsInfo[pointInfoKey].camInfos[camName]) {
-        pointsInfo[pointInfoKey].camInfos[camName] = { charcterDistance: 0, screenCoverage: 0, visibilityScore: 0 };
+        pointsInfo[pointInfoKey].camInfos[camName] = {
+          characterDistance: 0,
+          screenCoverage: 0,
+          visibilityScore: 0,
+          cameraScore: -1,
+          relativeDistanceScore: 0,
+        };
       }
 
       const fakeCharacter = window.pageRefs.fakeCharacter;
@@ -125,9 +145,6 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       //   // Reset camera position and clipping plane
       //   camera.position = camera.position.subtract(backwardVector);
       //   camera.minZ = originalMinZ;
-
-      //   const cameraPosition = camera.position;
-      //   const distance = BABYLON.Vector3.Distance(cameraPosition, characterPosition); // characterPosition needs to be defined
 
       //   // Now use this distance in place of `camera.radius`
       //   const distanceRatio = (distance + zoomOutDistance) / distance;
@@ -201,7 +218,9 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       const characterFullPotentialPixels = await countWhitePixels(scene);
       const fovScaleFactor = getFovScaleFactor(initialFov, camera.fov);
 
-      await delay(1);
+      if (TEST_POINT_INDEX > 0) {
+        await delay(1);
+      }
 
       // Reset state
       modelFile.transformNodes.details.setEnabled(true);
@@ -215,6 +234,19 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       const visibilityScore = characterFullPotentialPixels === 0 ? 0 : scaledWhitePixels / characterFullPotentialPixels;
       pointsInfo[pointInfoKey].camInfos[camName].visibilityScore = visibilityScore; // Inverted as per the definition
 
+      const cameraPosition = camera.globalPosition;
+      const characterDistance = BABYLON.Vector3.Distance(cameraPosition, characterPosition); // characterPosition needs to be defined
+      pointsInfo[pointInfoKey].camInfos[camName].characterDistance = characterDistance;
+
+      //   const cameraScore = calculateCameraScore({
+      //     distance: characterDistance,
+      //     visibility: visibilityScore,
+      //     screenOccupancy: screenCoverage,
+      //   });
+      //   pointsInfo[pointInfoKey].camInfos[camName].cameraScore = cameraScore; // Inverted as per the definition
+
+      //   console.log("cameraScore", cameraScore);
+
       if (vectorPointIndex === TEST_POINT_INDEX) {
         console.log("zoom in", scaledWhitePixels, "zoom out", characterFullPotentialPixels, "factor", fovScaleFactor);
 
@@ -223,6 +255,139 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       }
     }
   }
+
+  await delay(1);
+
+  calculateRelativeDistanceScores(pointsInfo);
+
+  console.log("======================================");
   console.log("pointsInfo");
-  //   await delay(30000);
+  console.log(pointsInfo);
+
+  await delay(5000);
+
+  // calucalte the cameraScore for each point influenced by the new relativeDistanceScore
+  for (const vectorPoint of pointsOnFloor) {
+    const pointInfoKey = getKeyFromPoint(vectorPoint);
+    const camInfos = pointsInfo[pointInfoKey].camInfos;
+    const camNames = Object.keys(camInfos);
+
+    for (const camName of camNames) {
+      const info = camInfos[camName];
+      const cameraScore = calculateCameraScore({
+        distance: info.characterDistance,
+        relativeDistanceScore: info.relativeDistanceScore,
+        visibility: info.visibilityScore,
+        screenOccupancy: info.screenCoverage,
+      });
+      pointsInfo[pointInfoKey].camInfos[camName].cameraScore = cameraScore;
+    }
+  }
+
+  // Find the best camera for each point
+  for (const vectorPoint of pointsOnFloor) {
+    const pointInfoKey = getKeyFromPoint(vectorPoint);
+
+    const camInfos = pointsInfo[pointInfoKey].camInfos;
+    const camNames = Object.keys(camInfos);
+
+    let bestCam1 = "";
+    let bestCam2 = "";
+    let bestScore1 = 0;
+    let bestScore2 = 0;
+
+    for (const camName of camNames) {
+      const cameraScore = camInfos[camName].cameraScore;
+      if (cameraScore > bestScore1) {
+        bestScore2 = bestScore1;
+        bestCam2 = bestCam1;
+        bestScore1 = cameraScore;
+        bestCam1 = camName;
+      } else if (cameraScore > bestScore2) {
+        bestScore2 = cameraScore;
+        bestCam2 = camName;
+      }
+
+      if (bestScore1 < 0.1) {
+        bestCam1 = "";
+      }
+      if (bestScore2 < 0.1) {
+        bestCam2 = "";
+      }
+    }
+
+    pointsInfo[pointInfoKey].bestCam1 = bestCam1;
+    pointsInfo[pointInfoKey].bestCam2 = bestCam2;
+  }
+
+  // Loop through each camera, and for each camera, loop through each point, and make a visual marker based on the points camera score (with createVisualMarker),
+  // 0 is red, 1 is green and inbetween is a gradient between red and green
+  // Also, log the camera score for each point
+
+  let highestCamScoreFound = 0;
+
+  for (const camName of camNames) {
+    for (const vectorPoint of pointsOnFloor) {
+      const pointInfoKey = getKeyFromPoint(vectorPoint);
+      const cameraScore = pointsInfo[pointInfoKey].camInfos[camName].cameraScore;
+
+      if (cameraScore > highestCamScoreFound) {
+        highestCamScoreFound = cameraScore;
+      }
+    }
+  }
+
+  function normalizeCamScore(cameraScore: number) {
+    // uses the highestCamScoreFound to normalize the camera score
+    return cameraScore / highestCamScoreFound;
+  }
+
+  for (const camName of camNames) {
+    const camera = modelFile.cameras[camName] as FreeCamera;
+    if (!camera) return;
+
+    const originalMinZ = camera.minZ;
+    const originalMaxZ = camera.maxZ;
+
+    camera.minZ = 0.1;
+    camera.maxZ = 10000;
+    scene.activeCamera = camera;
+    modelFile.transformNodes.details.setEnabled(true);
+
+    for (const vectorPoint of pointsOnFloor) {
+      const pointInfoKey = getKeyFromPoint(vectorPoint);
+      const cameraScore = pointsInfo[pointInfoKey].camInfos[camName].cameraScore;
+      const bestCam1 = pointsInfo[pointInfoKey].bestCam1;
+      const bestCam2 = pointsInfo[pointInfoKey].bestCam2;
+      const normalCamScore = normalizeCamScore(cameraScore);
+
+      //   This was the original way to get a heat map, but it's not easy to distinguish the higher values
+      let color = new BABYLON.Color3(1, 0, 0);
+      if (camName === bestCam1) {
+        color = new BABYLON.Color3(0, 1, 0);
+      } else if (camName === bestCam2) {
+        color = new BABYLON.Color3(0.9, 0.1, 0);
+      } else if (!bestCam1) {
+        color = new BABYLON.Color3(0, 0, 1);
+      }
+
+      //   color = new BABYLON.Color3(1 - cameraScore, cameraScore, 0);
+
+      createVisualMarker(vectorPoint, color);
+      //   console.log("normalCamScore", normalCamScore);
+    }
+    await delay(1);
+    scene.render();
+    await delay(2000);
+    modelFile.transformNodes.details.setEnabled(false);
+    scene.render();
+    await delay(2000);
+
+    camera.minZ = originalMinZ;
+    camera.maxZ = originalMaxZ;
+    modelFile.transformNodes.details.setEnabled(true);
+  }
+
+  console.log("pointsInfo");
+  await delay(5000);
 }

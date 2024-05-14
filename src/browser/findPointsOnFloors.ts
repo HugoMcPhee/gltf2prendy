@@ -1,6 +1,7 @@
 // mport { Scene, TransformNode, Vector3, Ray, MeshBuilder, Color4 } from "@babylonjs/core";
 
 import { Scene, TransformNode, Vector3 } from "@babylonjs/core";
+import { Color3 } from "babylonjs";
 import delay from "delay";
 
 // Function to create the grid of points and cast rays
@@ -35,7 +36,7 @@ export async function generateFloorPoints(gridDistance: number = 1): Promise<Vec
       const pickInfo = scene.pickWithRay(ray, (mesh) => transformNode.getChildMeshes().includes(mesh));
       if (pickInfo?.hit && pickInfo.pickedPoint) {
         foundPoints.push(pickInfo.pickedPoint);
-        createVisualMarker(pickInfo.pickedPoint);
+        // createVisualMarker(pickInfo.pickedPoint);
       }
     }
   }
@@ -46,8 +47,8 @@ export async function generateFloorPoints(gridDistance: number = 1): Promise<Vec
 }
 
 // Function to create a visual marker at a point
-function createVisualMarker(point: Vector3) {
-  console.log("Point t", point.toString());
+export function createVisualMarker(point: Vector3, color?: Color3) {
+  // console.log("Point", point.toString());
 
   const { BABYLON, scene } = window.pageRefs;
   if (!scene || !BABYLON) return;
@@ -55,7 +56,7 @@ function createVisualMarker(point: Vector3) {
   circle.position = point.clone();
   circle.position.y += 0.01; // Offset slightly above the floor to avoid z-fighting
   const newMaterial = new BABYLON.StandardMaterial("circleMat", scene);
-  newMaterial.emissiveColor = new BABYLON.Color3(1, 0, 0); // Red color, unlit
+  newMaterial.emissiveColor = color ?? new BABYLON.Color3(1, 0, 0); // Red color, unlit
   newMaterial.disableLighting = true;
 
   circle.material = newMaterial;

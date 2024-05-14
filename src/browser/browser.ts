@@ -34,12 +34,12 @@ import { loadModelFile } from "./loadModelFile";
 import { setUpBabylonScene } from "./setUpBabylonScene";
 import { shaders } from "./shaders";
 import { waitForSceneReady } from "./waitForSceneReady";
-import { generateFloorPoints } from "./findPointsOnFloors";
+import { createVisualMarker, generateFloorPoints } from "./findPointsOnFloors";
 import { countWhitePixels } from "./countWhitePixels";
 import { setupFakeCharacter } from "./setupFakeCharacter";
 import { applyBlackMaterialToDetails } from "./applyBlackMaterialToDetails";
 import { getFovScaleFactor } from "./getFovScaleFactor";
-import { calculateCameraScore } from "./calculateCameraScore";
+import { calculateCameraScore, calculateRelativeDistanceScores } from "./calculateCameraScore";
 
 // Expose everything on window.pageRefs
 
@@ -86,6 +86,8 @@ export const pageRefs = {
   applyBlackMaterialToDetails,
   getFovScaleFactor,
   calculateCameraScore,
+  createVisualMarker,
+  calculateRelativeDistanceScores,
   delay: async (time: number) => new Promise((resolve) => setTimeout(resolve, time)),
 };
 

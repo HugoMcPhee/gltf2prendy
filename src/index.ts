@@ -31,11 +31,11 @@ import { splitFolderPath } from "./paths";
 import { readAndSavePlaceGltf } from "./readAndSavePlaceGltf";
 import { renderPlaceInBabylon } from "./renderPlaceInBabylon";
 import { countWhitePixels } from "./browser/countWhitePixels";
-import { generateFloorPoints } from "./browser/findPointsOnFloors";
+import { createVisualMarker, generateFloorPoints } from "./browser/findPointsOnFloors";
 import { setupFakeCharacter } from "./browser/setupFakeCharacter";
 import { applyBlackMaterialToDetails } from "./browser/applyBlackMaterialToDetails";
 import { getFovScaleFactor } from "./browser/getFovScaleFactor";
-import { calculateCameraScore } from "./browser/calculateCameraScore";
+import { calculateCameraScore, calculateRelativeDistanceScores } from "./browser/calculateCameraScore";
 
 type ModelFile = {
   meshes: Record<string, AbstractMesh>;
@@ -74,6 +74,8 @@ type PageRefs = {
   applyBlackMaterialToDetails: typeof applyBlackMaterialToDetails;
   getFovScaleFactor: typeof getFovScaleFactor;
   calculateCameraScore: typeof calculateCameraScore;
+  createVisualMarker: typeof createVisualMarker;
+  calculateRelativeDistanceScores: typeof calculateRelativeDistanceScores;
 };
 
 export const nodeRefs = {
@@ -98,10 +100,19 @@ export type PlaceInfo = {
 };
 
 export type PointsInfo = Record<
-  string,
+  string, // point key, its the x,y,z of the point as a string
   {
-    point: [number, number, number];
-    camInfos: Record<string, { screenCoverage: number; visibilityScore: number; charcterDistance: number }>;
+    point: [number, number, number]; // x y z
+    camInfos: Record<
+      string, // camera name (4 cameras for example)
+      {
+        screenCoverage: number;
+        visibilityScore: number;
+        characterDistance: number;
+        relativeDistanceScore: number; // 0 to 1, where 1 is closest distance
+        cameraScore: number;
+      } // cameraScore is made of the other scores mostly, but potentially also other influences
+    >;
     bestCam1: string;
     bestCam2: string;
   }

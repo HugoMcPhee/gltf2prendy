@@ -1,20 +1,26 @@
+import { relative } from "path/posix";
+import { PointsInfo } from "..";
+
 type CameraData = {
   visibility: number; // 0 to 1, where 1 means fully visible
   screenOccupancy: number; // 0 to 1, represents the percentage of the screen the character occupies
   distance: number; // Raw distance from the camera to the character
+  relativeDistanceScore: number; // 0 to 1, where 1 is closest distance
 };
 
 export function calculateCameraScore(data: CameraData): number {
   // Constants for weight - these might need to be adjusted based on testing and gameplay feedback
-  const visibilityWeight = 0.6;
-  const occupancyWeight = 0.3;
+  const visibilityWeight = 0.3;
+  const occupancyWeight = 0.9;
   const distanceWeight = 0.1;
 
   // Normalize distance into a score: we assume a certain optimal distance range
   // Let's assume optimal distance is between 10 and 50 units
-  const optimalMinDistance = 10;
-  const optimalMaxDistance = 50;
+  const optimalMinDistance = 5;
+  const optimalMaxDistance = 20;
   let normalizedDistanceScore: number;
+
+  console.log("distance", data.distance);
 
   if (data.distance < optimalMinDistance) {
     normalizedDistanceScore = data.distance / optimalMinDistance; // Decreases as distance decreases below min
@@ -30,5 +36,44 @@ export function calculateCameraScore(data: CameraData): number {
     data.screenOccupancy * occupancyWeight +
     normalizedDistanceScore * distanceWeight;
 
-  return totalScore;
+  // return totalScore * (1 + data.relativeDistanceScore) - totalScore / 2;
+
+  return totalScore * (0.5 + data.relativeDistanceScore);
+}
+
+export function calculateRelativeDistanceScores(pointsInfo: PointsInfo): void {
+  console.log("calculateRelativeDistanceScores");
+
+  const cameraMinMaxDistances: Record<string, { min: number; max: number }> = {};
+
+  // Initialize min and max distances for each camera
+  for (const pointKey in pointsInfo) {
+    const camInfos = pointsInfo[pointKey].camInfos;
+    Object.keys(camInfos).forEach((camName) => {
+      if (!cameraMinMaxDistances[camName]) {
+        cameraMinMaxDistances[camName] = { min: Infinity, max: -Infinity };
+      }
+      const distance = camInfos[camName].characterDistance;
+      if (distance < cameraMinMaxDistances[camName].min) {
+        cameraMinMaxDistances[camName].min = distance;
+      }
+      if (distance > cameraMinMaxDistances[camName].max) {
+        cameraMinMaxDistances[camName].max = distance;
+      }
+    });
+  }
+
+  console.log("cameraMinMaxDistances", cameraMinMaxDistances);
+
+  // Calculate relativeDistanceScore for each camera at each point
+  for (const pointKey in pointsInfo) {
+    const camInfos = pointsInfo[pointKey].camInfos;
+    Object.keys(camInfos).forEach((camName) => {
+      const info = camInfos[camName];
+      const { min, max } = cameraMinMaxDistances[camName];
+      const normalizedDistance = (info.characterDistance - min) / (max - min);
+      // Apply non-linear falloff, here using a quadratic decay
+      info.relativeDistanceScore = 1 - normalizedDistance * normalizedDistance;
+    });
+  }
 }
