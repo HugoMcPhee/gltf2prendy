@@ -21,6 +21,14 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
   } = window.pageRefs;
   if (!scene || !modelFile || !BABYLON || !canvas) return;
 
+  const DISTANCE_BETWEEN_POINTS = 2;
+  const RESOLUTION_LEVEL = 3;
+
+  //   const TEST_POINT_INDEX = 8;
+  const TEST_POINT_INDEX = -1;
+  const ZOOM_OUT_REVEAL_AMOUNT = 0.55;
+  const CHECK_WAIT_TIME = 750;
+
   function getKeyFromPoint(vectorPoint: Vector3) {
     const { x: realX, y: realY, z: realZ } = vectorPoint;
     const x = Math.round(realX * 1000) / 1000;
@@ -33,7 +41,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
   await waitForSceneReady(scene);
 
   const engine = scene.getEngine();
-  engine.setSize(192 * 7, 108 * 7); // Assume fixed size for simplicity
+  engine.setSize(192 * RESOLUTION_LEVEL, 108 * RESOLUTION_LEVEL); // Assume fixed size for simplicity
   canvas.width = engine.getRenderWidth();
   canvas.height = engine.getRenderHeight();
 
@@ -42,11 +50,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
 
   const totalPixelsAmount = engine.getRenderWidth() * engine.getRenderHeight();
 
-  const pointsOnFloor = await generateFloorPoints(3);
-
-  //   const TEST_POINT_INDEX = 8;
-  const TEST_POINT_INDEX = -1;
-  const ZOOM_OUT_REVEAL_AMOUNT = 0.55;
+  const pointsOnFloor = await generateFloorPoints(DISTANCE_BETWEEN_POINTS);
 
   const camNames = placeInfo.camNames;
   for (const camName of camNames) {
@@ -251,7 +255,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
         console.log("zoom in", scaledWhitePixels, "zoom out", characterFullPotentialPixels, "factor", fovScaleFactor);
 
         // console.log("visibilityScore", visibilityScore, "charScreenAmount", screenCoverage);
-        await delay(2000);
+        await delay(CHECK_WAIT_TIME);
       }
     }
   }
@@ -264,7 +268,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
   console.log("pointsInfo");
   console.log(pointsInfo);
 
-  await delay(5000);
+  //   await delay(CHECK_WAIT_TIME);
 
   // calucalte the cameraScore for each point influenced by the new relativeDistanceScore
   for (const vectorPoint of pointsOnFloor) {
@@ -378,10 +382,10 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     }
     await delay(1);
     scene.render();
-    await delay(2000);
+    await delay(CHECK_WAIT_TIME);
     modelFile.transformNodes.details.setEnabled(false);
     scene.render();
-    await delay(2000);
+    await delay(CHECK_WAIT_TIME);
 
     camera.minZ = originalMinZ;
     camera.maxZ = originalMaxZ;
@@ -389,5 +393,5 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
   }
 
   console.log("pointsInfo");
-  await delay(5000);
+  await delay(CHECK_WAIT_TIME);
 }
