@@ -40,6 +40,7 @@ import { setupFakeCharacter } from "./setupFakeCharacter";
 import { applyBlackMaterialToDetails } from "./applyBlackMaterialToDetails";
 import { getFovScaleFactor } from "./getFovScaleFactor";
 import { calculateCameraScore, calculateRelativeDistanceScores } from "./calculateCameraScore";
+import { clusterPointsIntoIslands } from "./findPointIslands";
 
 // Expose everything on window.pageRefs
 
@@ -88,6 +89,7 @@ export const pageRefs = {
   calculateCameraScore,
   createVisualMarker,
   calculateRelativeDistanceScores,
+  clusterPointsIntoIslands,
   delay: async (time: number) => new Promise((resolve) => setTimeout(resolve, time)),
 };
 

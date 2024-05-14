@@ -36,6 +36,7 @@ import { setupFakeCharacter } from "./browser/setupFakeCharacter";
 import { applyBlackMaterialToDetails } from "./browser/applyBlackMaterialToDetails";
 import { getFovScaleFactor } from "./browser/getFovScaleFactor";
 import { calculateCameraScore, calculateRelativeDistanceScores } from "./browser/calculateCameraScore";
+import { clusterPointsIntoIslands } from "./browser/findPointIslands";
 
 type ModelFile = {
   meshes: Record<string, AbstractMesh>;
@@ -76,6 +77,7 @@ type PageRefs = {
   calculateCameraScore: typeof calculateCameraScore;
   createVisualMarker: typeof createVisualMarker;
   calculateRelativeDistanceScores: typeof calculateRelativeDistanceScores;
+  clusterPointsIntoIslands: typeof clusterPointsIntoIslands;
 };
 
 export const nodeRefs = {
