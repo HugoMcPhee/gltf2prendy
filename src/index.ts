@@ -31,12 +31,14 @@ import { splitFolderPath } from "./paths";
 import { readAndSavePlaceGltf } from "./readAndSavePlaceGltf";
 import { renderPlaceInBabylon } from "./renderPlaceInBabylon";
 import { countWhitePixels } from "./browser/countWhitePixels";
-import { createVisualMarker, generateFloorPoints } from "./browser/findPointsOnFloors";
+import { createVisualMarker, generateFloorPoints, getSimplifiedPoint } from "./browser/findPointsOnFloors";
 import { setupFakeCharacter } from "./browser/setupFakeCharacter";
 import { applyBlackMaterialToDetails } from "./browser/applyBlackMaterialToDetails";
 import { getFovScaleFactor } from "./browser/getFovScaleFactor";
 import { calculateCameraScore, calculateRelativeDistanceScores } from "./browser/calculateCameraScore";
-import { clusterPointsIntoIslands } from "./browser/findPointIslands";
+import { findIslandsFromPoints } from "./browser/findIslandsFromPoints";
+import { createAndExtrudeMesh } from "./browser/createAndExtrudeMesh";
+import { generateTrianglesFromPoints } from "./browser/generateTrianglesFromPoints";
 
 type ModelFile = {
   meshes: Record<string, AbstractMesh>;
@@ -77,7 +79,10 @@ type PageRefs = {
   calculateCameraScore: typeof calculateCameraScore;
   createVisualMarker: typeof createVisualMarker;
   calculateRelativeDistanceScores: typeof calculateRelativeDistanceScores;
-  clusterPointsIntoIslands: typeof clusterPointsIntoIslands;
+  findIslandsFromPoints: typeof findIslandsFromPoints;
+  generateTrianglesFromPoints: typeof generateTrianglesFromPoints;
+  createAndExtrudeMesh: typeof createAndExtrudeMesh;
+  getSimplifiedPoint: typeof getSimplifiedPoint;
 };
 
 export const nodeRefs = {

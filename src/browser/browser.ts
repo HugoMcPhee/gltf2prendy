@@ -26,6 +26,9 @@ import {
   TransformNode,
   Vector3,
   ArcRotateCamera,
+  Mesh,
+  VertexData,
+  VertexBuffer,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { getFileFromBase64 } from "./getFileFromBase64";
@@ -34,13 +37,15 @@ import { loadModelFile } from "./loadModelFile";
 import { setUpBabylonScene } from "./setUpBabylonScene";
 import { shaders } from "./shaders";
 import { waitForSceneReady } from "./waitForSceneReady";
-import { createVisualMarker, generateFloorPoints } from "./findPointsOnFloors";
+import { createVisualMarker, generateFloorPoints, getSimplifiedPoint } from "./findPointsOnFloors";
 import { countWhitePixels } from "./countWhitePixels";
 import { setupFakeCharacter } from "./setupFakeCharacter";
 import { applyBlackMaterialToDetails } from "./applyBlackMaterialToDetails";
 import { getFovScaleFactor } from "./getFovScaleFactor";
 import { calculateCameraScore, calculateRelativeDistanceScores } from "./calculateCameraScore";
-import { clusterPointsIntoIslands } from "./findPointIslands";
+import { findIslandsFromPoints } from "./findIslandsFromPoints";
+import { createAndExtrudeMesh } from "./createAndExtrudeMesh";
+import { generateTrianglesFromPoints } from "./generateTrianglesFromPoints";
 
 // Expose everything on window.pageRefs
 
@@ -69,16 +74,19 @@ export const BABYLON = {
   StandardMaterial,
   Ray,
   Quaternion,
+  Mesh,
+  VertexData,
+  VertexBuffer,
 };
 
 export const pageRefs = {
+  handleGltfModel,
   forEach,
   keyBy,
   getFileFromBase64,
   loadModelFile,
   BABYLON,
   shaders,
-  handleGltfModel,
   waitForSceneReady,
   setUpBabylonScene,
   generateFloorPoints,
@@ -89,7 +97,10 @@ export const pageRefs = {
   calculateCameraScore,
   createVisualMarker,
   calculateRelativeDistanceScores,
-  clusterPointsIntoIslands,
+  findIslandsFromPoints,
+  generateTrianglesFromPoints,
+  createAndExtrudeMesh,
+  getSimplifiedPoint,
   delay: async (time: number) => new Promise((resolve) => setTimeout(resolve, time)),
 };
 

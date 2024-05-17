@@ -23,6 +23,5 @@ export async function handleGltfModel({
     window.pageRefs.modelFile = modelFile;
 
     await setUpPlaceForRendering({ modelFile, placeInfo });
-    // await generateFloorPoints(1.5);
   }
 }

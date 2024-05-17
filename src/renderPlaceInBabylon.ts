@@ -58,6 +58,12 @@ export async function renderPlaceInBabylon({
   const {} =
     (await page.evaluate(
       async (gltfFilesData, placeInfo) => {
+        console.log("Running in browser");
+        // await window.pageRefs.delay(1000);
+        // console.log(window.pageRefs);
+
+        // await window.pageRefs.delay(10000);
+
         const { handleGltfModel, waitForSceneReady, setUpBabylonScene } = window.pageRefs;
 
         setUpBabylonScene();

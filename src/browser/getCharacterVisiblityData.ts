@@ -1,6 +1,7 @@
-import { DepthRenderer, FreeCamera, Vector3 } from "@babylonjs/core";
+import { FreeCamera, Mesh, Scene, Vector3 } from "@babylonjs/core";
 import { PlaceInfo, PointsInfo } from "..";
-import { Vector } from "babylonjs/Maths/index";
+
+export type IdPoint3D = { x: number; y: number; z: number; id: string };
 
 export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInfo: PointsInfo) {
   const {
@@ -18,6 +19,10 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     calculateCameraScore,
     createVisualMarker,
     calculateRelativeDistanceScores,
+    findIslandsFromPoints,
+    generateTrianglesFromPoints,
+    createAndExtrudeMesh,
+    getSimplifiedPoint,
   } = window.pageRefs;
   if (!scene || !modelFile || !BABYLON || !canvas) return;
 
@@ -30,10 +35,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
   const CHECK_WAIT_TIME = 750;
 
   function getKeyFromPoint(vectorPoint: Vector3) {
-    const { x: realX, y: realY, z: realZ } = vectorPoint;
-    const x = Math.round(realX * 1000) / 1000;
-    const y = Math.round(realY * 1000) / 1000;
-    const z = Math.round(realZ * 1000) / 1000;
+    const { x, y, z } = getSimplifiedPoint(vectorPoint);
     const pointInfoKey = `${x},${y},${z}`;
     return pointInfoKey;
   }
@@ -255,7 +257,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
         console.log("zoom in", scaledWhitePixels, "zoom out", characterFullPotentialPixels, "factor", fovScaleFactor);
 
         // console.log("visibilityScore", visibilityScore, "charScreenAmount", screenCoverage);
-        await delay(CHECK_WAIT_TIME);
+        // await delay(CHECK_WAIT_TIME);
       }
     }
   }
@@ -263,10 +265,6 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
   await delay(1);
 
   calculateRelativeDistanceScores(pointsInfo);
-
-  console.log("======================================");
-  console.log("pointsInfo");
-  console.log(pointsInfo);
 
   //   await delay(CHECK_WAIT_TIME);
 
@@ -377,15 +375,15 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
 
       //   color = new BABYLON.Color3(1 - cameraScore, cameraScore, 0);
 
-      createVisualMarker(vectorPoint, color);
+      //   createVisualMarker(vectorPoint, color);
       //   console.log("normalCamScore", normalCamScore);
     }
     await delay(1);
     scene.render();
-    await delay(CHECK_WAIT_TIME);
+    // await delay(CHECK_WAIT_TIME);
     modelFile.transformNodes.details.setEnabled(false);
     scene.render();
-    await delay(CHECK_WAIT_TIME);
+    // await delay(CHECK_WAIT_TIME);
 
     camera.minZ = originalMinZ;
     camera.maxZ = originalMaxZ;
@@ -393,5 +391,171 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
   }
 
   console.log("pointsInfo");
-  await delay(CHECK_WAIT_TIME);
+  //   await delay(CHECK_WAIT_TIME);
+
+  // organise the points info into a record of <CameraName, { x, y, z, pointId }[] >
+  const pointsByBestCameras: Record<string, IdPoint3D[]> = {};
+  for (const vectorPoint of pointsOnFloor) {
+    const pointInfoKey = getKeyFromPoint(vectorPoint);
+    const bestCam1 = pointsInfo[pointInfoKey].bestCam1;
+    const bestCam2 = pointsInfo[pointInfoKey].bestCam2;
+
+    const simplerPoint = getSimplifiedPoint(vectorPoint);
+
+    if (bestCam1) {
+      if (!pointsByBestCameras[bestCam1]) {
+        pointsByBestCameras[bestCam1] = [];
+      }
+      pointsByBestCameras[bestCam1].push({ x: simplerPoint.x, y: simplerPoint.y, z: simplerPoint.z, id: pointInfoKey });
+    }
+  }
+
+  //   for each Camera,  get the isalnds and store it in a pointIslandsByCamera map (using findIslandsFromPoints)
+  const pointIslandsByCamera: Record<string, IdPoint3D[][]> = {};
+  for (const camName of camNames) {
+    const points = pointsByBestCameras[camName];
+    if (points) {
+      const islands = findIslandsFromPoints(points, DISTANCE_BETWEEN_POINTS, 2);
+      pointIslandsByCamera[camName] = islands;
+    }
+  }
+
+  //   for each camera, render the islands with a different color
+  for (const camName of camNames) {
+    const islands = pointIslandsByCamera[camName];
+    if (!islands) continue;
+
+    const camera = modelFile.cameras[camName] as FreeCamera;
+    if (!camera) return;
+    scene.activeCamera = camera;
+    scene.render();
+    await delay(1);
+    scene.render();
+    await delay(CHECK_WAIT_TIME);
+
+    let visualMarkers = [];
+    for (const island of islands) {
+      for (const point of island) {
+        const color = new BABYLON.Color3(1, 1, 0);
+        visualMarkers.push(createVisualMarker(new BABYLON.Vector3(point.x, point.y, point.z), color));
+      }
+    }
+    scene.render();
+    await delay(1);
+    scene.render();
+    await delay(CHECK_WAIT_TIME);
+
+    for (const visualMarker of visualMarkers) {
+      await delay(1);
+
+      if (visualMarker) {
+        scene.removeMesh(visualMarker);
+        visualMarker.dispose();
+      }
+    }
+  }
+
+  // for each camera, fidn the triangles for each island with generateTrianglesFromPoints
+  const pointTrianglesByCamera: Record<string, IdPoint3D[][][]> = {};
+  for (const camName of camNames) {
+    const points = pointsByBestCameras[camName];
+    if (points) {
+      const islands = findIslandsFromPoints(points, DISTANCE_BETWEEN_POINTS, 2);
+      const triangles = islands.map((island) => generateTrianglesFromPoints(island, 1.5 * DISTANCE_BETWEEN_POINTS, 2));
+      pointTrianglesByCamera[camName] = triangles;
+    }
+  }
+
+  // Create a function to create and add a triangle mesh to the scene
+  function createTriangle(scene: Scene, points: Vector3[]): void {
+    // Create arrays for positions and indices
+    const positions = [
+      points[0].x,
+      points[0].y,
+      points[0].z,
+      points[1].x,
+      points[1].y,
+      points[1].z,
+      points[2].x,
+      points[2].y,
+      points[2].z,
+    ];
+    const indices = [0, 1, 2];
+
+    // Create a VertexData object and assign the positions and indices
+    const vertexData = new BABYLON.VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = indices;
+
+    // Calculate normals
+    const normals: number[] = [];
+    BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+    vertexData.normals = normals;
+
+    // Create a mesh and apply the vertex data
+    const mesh = new BABYLON.Mesh("triangle", scene);
+    vertexData.applyToMesh(mesh);
+
+    // Create a material and set it to be double-sided
+    const material = new BABYLON.StandardMaterial("material", scene);
+    material.diffuseColor = new BABYLON.Color3(0, 0, 1); // Green color
+    material.backFaceCulling = false;
+    mesh.material = material;
+  }
+
+  //   for each camera, render the triangles
+  const meshesByCamera: Record<string, Mesh[]> = {};
+  for (const camName of camNames) {
+    const triangles = pointTrianglesByCamera[camName];
+    if (!triangles) continue;
+
+    const camera = modelFile.cameras[camName] as FreeCamera;
+    if (!camera) return;
+    scene.activeCamera = camera;
+    scene.render();
+    await delay(1);
+    scene.render();
+    await delay(CHECK_WAIT_TIME);
+
+    let meshes: Mesh[] = [];
+    // for (const triangleSet of triangles) {
+    //   for (const triangle of triangleSet) {
+    //     for (const point of triangle) {
+    //       await delay(1);
+    //       const color = new BABYLON.Color3(1, 1, 0);
+    //       createVisualMarker(new BABYLON.Vector3(point.x, point.y, point.z), color);
+    //       scene.render();
+    //       await delay(1);
+    //       scene.render();
+    //     }
+    //     await delay(50);
+
+    //     createTriangle(
+    //       scene,
+    //       triangle.map((point) => new BABYLON.Vector3(point.x, point.y, point.z))
+    //     );
+
+    //     await delay(1);
+    //   }
+    //   //   const mesh = createAndExtrudeMesh(scene, triangleSet);
+
+    //   //   if (mesh) {
+    //   //     meshes.push(mesh);
+    //   //   }
+    // }
+    meshesByCamera[camName] = meshes;
+    scene.render();
+    await delay(1);
+    scene.render();
+    await delay(CHECK_WAIT_TIME * 5);
+
+    for (const mesh of meshes) {
+      await delay(1);
+
+      if (mesh) {
+        scene.removeMesh(mesh);
+        mesh.dispose();
+      }
+    }
+  }
 }
