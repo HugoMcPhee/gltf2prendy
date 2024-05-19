@@ -47,6 +47,7 @@ import { findIslandsFromPoints } from "./findIslandsFromPoints";
 import { createAndExtrudeMesh } from "./createAndExtrudeMesh";
 import { generateTrianglesFromPoints } from "./generateTrianglesFromPoints";
 import { filterMap } from "chootils/dist/arrays";
+import { findGridPolyForGridPoint, findGridPolysForIsland, findPolyTypeFromPoints } from "./findGridPolysForIsland";
 
 // Expose everything on window.pageRefs
 
@@ -84,6 +85,8 @@ export const pageRefs = {
   gridPointMap: {},
   gridPointsOrganized: {},
   pointIslandsByCamera: {},
+  gridPolyMap: {},
+  islandPolyIdsByCamera: {},
   //
   handleGltfModel,
   forEach,
@@ -106,6 +109,9 @@ export const pageRefs = {
   generateTrianglesFromPoints,
   createAndExtrudeMesh,
   getSimplifiedPoint,
+  findGridPolyForGridPoint,
+  findGridPolysForIsland,
+  findPolyTypeFromPoints,
   filterMap,
   delay: async (time: number) => new Promise((resolve) => setTimeout(resolve, time)),
 };

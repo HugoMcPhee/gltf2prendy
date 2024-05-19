@@ -1,5 +1,7 @@
 import { FreeCamera, Mesh, Scene, Vector3 } from "@babylonjs/core";
 import { PlaceInfo, PointsInfo } from "..";
+import { GridPoint, GridPolyId } from "./findPointsOnFloors";
+import { Point3D } from "chootils/dist/points3d";
 
 export type IdPoint3D = { x: number; y: number; z: number; id: string };
 
@@ -26,6 +28,9 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     gridPointMap,
     gridPointsOrganized,
     pointIslandsByCamera,
+    islandPolyIdsByCamera,
+    findGridPolysForIsland,
+    gridPolyMap,
     filterMap,
   } = window.pageRefs;
   if (!scene || !modelFile || !BABYLON || !canvas) return;
@@ -271,8 +276,6 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     pointIdsByBestCam[bestCam].push(pointId);
   }
 
-  await delay(2000);
-
   //   for each Camera,  get the isalnds and store it in a pointIslandsByCamera map (using findIslandsFromPoints)
   for (const camName of camNames) {
     const pointIds = pointIdsByBestCam[camName];
@@ -280,6 +283,15 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     // await delay(5000);
     pointIslandsByCamera[camName] = islands;
   }
+
+  await delay(2000);
+  console.log("=====================");
+  console.log("=====================");
+  console.log("=====================");
+  console.log("pointIslandsByCamera");
+  console.log(pointIslandsByCamera);
+
+  await delay(2000);
 
   //   for each camera, render the islands with a different color
   for (const camName of camNames) {
@@ -292,11 +304,11 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     scene.render();
     await delay(1);
     scene.render();
-    await delay(CHECK_WAIT_TIME);
+    await delay(CHECK_WAIT_TIME / 7);
 
     let visualMarkers = [];
-    for (const island of Object.values(pointsByIsland)) {
-      for (const pointId of island) {
+    for (const islandPointIds of Object.values(pointsByIsland)) {
+      for (const pointId of islandPointIds) {
         const point = gridPointMap[pointId].point;
         if (!point) continue;
         const color = new BABYLON.Color3(1, 1, 0);
@@ -305,7 +317,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       scene.render();
       await delay(1);
       scene.render();
-      await delay(CHECK_WAIT_TIME);
+      await delay(CHECK_WAIT_TIME / 7);
     }
 
     for (const visualMarker of visualMarkers) {
@@ -317,5 +329,177 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       }
     }
   }
-  await delay(10000);
+
+  async function renderDebugGridPoly(polyId: string, color: BABYLON.Color3) {
+    const meshesToRender: Mesh[] = [];
+    const gridPoly = gridPolyMap[polyId];
+    if (!gridPoly) return meshesToRender;
+
+    if (gridPoly.polyType === "quad" || gridPoly.polyType === "empty") return meshesToRender;
+
+    const topLeftPointId = gridPoly.pointIds.topLeft;
+    const topRightPointId = gridPoly.pointIds.topRight;
+    const bottomRightPointId = gridPoly.pointIds.bottomRight;
+    const bottomLeftPointId = gridPoly.pointIds.bottomLeft;
+
+    const topLeftPoint = topLeftPointId && gridPointMap[topLeftPointId]?.point;
+    const topRightPoint = topRightPointId && gridPointMap[topRightPointId]?.point;
+    const bottomRightPoint = bottomRightPointId && gridPointMap[bottomRightPointId]?.point;
+    const bottomLeftPoint = bottomLeftPointId && gridPointMap[bottomLeftPointId]?.point;
+
+    const pointsToRender = [topLeftPoint, topRightPoint, bottomRightPoint, bottomLeftPoint].filter(
+      (p) => p
+    ) as Point3D[];
+
+    for (const point of pointsToRender) {
+      const newMarker = createVisualMarker(new BABYLON.Vector3(point.x, point.y, point.z), color);
+      if (newMarker) meshesToRender.push(newMarker);
+    }
+
+    return meshesToRender;
+  }
+
+  // Update to use pointIds?
+  // ALSO need to make it so quad polys make two triangles
+
+  function getTriPointsFromGridPolyIds(gridPolyIds: string[]) {
+    const triPoints: Point3D[][] = [];
+    for (const polyId of gridPolyIds) {
+      const gridPoly = gridPolyMap[polyId];
+      if (!gridPoly) continue;
+
+      const topLeftPointId = gridPoly.pointIds.topLeft;
+      const topRightPointId = gridPoly.pointIds.topRight;
+      const bottomRightPointId = gridPoly.pointIds.bottomRight;
+      const bottomLeftPointId = gridPoly.pointIds.bottomLeft;
+
+      const topLeftPoint = topLeftPointId && gridPointMap[topLeftPointId]?.point;
+      const topRightPoint = topRightPointId && gridPointMap[topRightPointId]?.point;
+      const bottomRightPoint = bottomRightPointId && gridPointMap[bottomRightPointId]?.point;
+      const bottomLeftPoint = bottomLeftPointId && gridPointMap[bottomLeftPointId]?.point;
+
+      if (gridPoly.polyType === "empty") continue;
+
+      // NOTE reverse the points to make the triangles face the right way
+
+      if (gridPoly.polyType === "quad") {
+        const triPointsA = [topLeftPoint, topRightPoint, bottomRightPoint].filter((p) => p).reverse() as Point3D[];
+        const triPointsB = [bottomRightPoint, bottomLeftPoint, topLeftPoint].filter((p) => p).reverse() as Point3D[];
+
+        triPoints.push(triPointsA);
+        triPoints.push(triPointsB);
+      } else {
+        const pointsToRender = [topLeftPoint, topRightPoint, bottomRightPoint, bottomLeftPoint]
+          .filter((p) => p)
+          .reverse() as Point3D[];
+
+        triPoints.push(pointsToRender);
+      }
+    }
+    return triPoints;
+  }
+
+  const createTriMeshFromGridPolyIds = (gridPolyIds: GridPolyId[], scene: Scene): Mesh => {
+    const points: Point3D[][] = getTriPointsFromGridPolyIds(gridPolyIds);
+
+    console.log("--------------------------");
+    console.log("points");
+    console.log(points);
+
+    const uniqueVertices: Point3D[] = [];
+    const indices: number[] = [];
+
+    // Using an object to track vertex indices
+    const vertexLookup: { [key: string]: number } = {};
+
+    let index = 0;
+    points.forEach((triangle) => {
+      triangle.forEach((vertex) => {
+        const key = `${vertex.x}_${vertex.y}_${vertex.z}`; // Using underscore as the separator
+        if (vertexLookup[key] === undefined) {
+          uniqueVertices.push(vertex);
+          vertexLookup[key] = index++;
+        }
+        indices.push(vertexLookup[key]);
+      });
+    });
+
+    const positions: number[] = [];
+    const normals: number[] = [];
+
+    uniqueVertices.forEach((vertex) => {
+      positions.push(vertex.x, vertex.y, vertex.z);
+    });
+
+    BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+
+    const customMesh = new BABYLON.Mesh("custom", scene);
+    const vertexData = new BABYLON.VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = indices;
+    vertexData.normals = normals;
+    vertexData.applyToMesh(customMesh, true);
+
+    customMesh.movePOV(0, 1, 0);
+
+    return customMesh;
+  };
+
+  //   for each camera, for each isalnd, get the island poly data
+  for (const camName of camNames) {
+    const pointsByIsland = pointIslandsByCamera[camName];
+    if (!pointsByIsland) continue;
+
+    const camera = modelFile.cameras[camName] as FreeCamera;
+    if (!camera) return;
+    scene.activeCamera = camera;
+    scene.render();
+    await delay(1);
+    scene.render();
+    await delay(CHECK_WAIT_TIME);
+
+    let madeMeshes: Mesh[] = [];
+    const islandIds = Object.keys(pointsByIsland);
+    console.log("--------------------");
+    console.log("camName", camName);
+    console.log("pointsByIsland", pointsByIsland);
+    console.log("islandIds", islandIds);
+
+    for (const islandId of islandIds) {
+      const islandPointIds = pointsByIsland[islandId];
+      console.log("islandPointIds", islandPointIds);
+
+      const foundIslandPolyIds = await findGridPolysForIsland(islandPointIds);
+      console.log("foundIslandPolyIds", foundIslandPolyIds);
+
+      if (!islandPolyIdsByCamera[camName]) islandPolyIdsByCamera[camName] = {};
+      islandPolyIdsByCamera[camName][islandId] = foundIslandPolyIds;
+
+      const islandTriMesh = createTriMeshFromGridPolyIds(foundIslandPolyIds, scene);
+      madeMeshes.push(islandTriMesh);
+      scene.render();
+      await delay(1);
+      scene.render();
+      await delay(CHECK_WAIT_TIME);
+      madeMeshes.forEach((m) => m.dispose());
+      scene.render();
+      // for (const polyId of foundIslandPolyIds) {
+      //   // make a random color
+      //   const color = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
+      //   madeMeshes = madeMeshes.concat(await renderDebugGridPoly(polyId, color));
+
+      //   if (madeMeshes.length) {
+      //     scene.render();
+      //     await delay(1);
+      //     scene.render();
+      //     await delay(100);
+      //     madeMeshes.forEach((m) => m.dispose());
+      //     scene.render();
+      //   }
+      // }
+    }
+  }
+
+  // createAndExtrudeMesh
+  await delay(2000);
 }

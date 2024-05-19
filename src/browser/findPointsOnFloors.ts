@@ -4,7 +4,7 @@ import { Point3D } from "chootils/dist/points3d";
 
 export type GridPoint = {
   id: string; // there can be multiple points at the same xz, so there's a unique id too (maybe pointIndex)
-  point: Point3D | undefined;
+  point: Point3D | undefined; // an { x, y, z } point in 3D space
   gridX: number;
   gridZ: number;
   layer: number; // 0 is the lowest ray found, 1 is the second, etc, so points on different layers are not connected
@@ -20,8 +20,9 @@ export type CamName = string;
 export type GridPointMap = Record<GridPointId, GridPoint>;
 export type GridPointsOrganized = Record<X_Index, Record<Z_Index, GridPointId[]>>;
 export type PointIslandsByCamera = Record<CamName, Record<IslandIndex, GridPointId[]>>;
+export type IslandPolyIdsByCamera = Record<CamName, Record<IslandIndex, GridPolyId[]>>;
 
-export type PolyType = "quad" | "triDownLeft" | "triUpLeft" | "triUpRight" | "triDownRight" | "empty";
+export type PolyType = "quad" | "triBottomLeft" | "triTopLeft" | "triTopRight" | "triBottomRight" | "empty";
 
 export type GridPoly = {
   id: string;
@@ -132,7 +133,7 @@ export function createVisualMarker(point: Vector3, color?: Color3) {
   if (!scene || !BABYLON) return;
   const circle = BABYLON.MeshBuilder.CreateSphere("circle", { diameter: 0.4 }, scene);
   circle.position = point.clone();
-  circle.position.y += 0.01; // Offset slightly above the floor to avoid z-fighting
+  circle.position.y += 0.2; // Offset slightly above the floor to avoid z-fighting
   const newMaterial = new BABYLON.StandardMaterial("circleMat", scene);
   newMaterial.emissiveColor = color ?? new BABYLON.Color3(1, 0, 0); // Red color, unlit
   newMaterial.disableLighting = true;

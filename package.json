@@ -26,10 +26,12 @@
     "@ffmpeg.wasm/core-mt": "^0.12.0",
     "@ffmpeg.wasm/main": "^0.12.0",
     "@gltf-transform/core": "^3.2.1",
+    "@types/d3-delaunay": "^6.0.4",
     "@types/puppeteer-core": "^7.0.4",
     "babylonjs": "^7.6.0",
     "chootils": "^0.3.9",
     "chrome-paths": "^1.0.1",
+    "d3-delaunay": "^6.0.4",
     "delay": "^6.0.0",
     "puppeteer": "^22.8.0",
     "puppeteer-core": "^22.8.0"

@@ -34,6 +34,8 @@ import { countWhitePixels } from "./browser/countWhitePixels";
 import {
   GridPointMap,
   GridPointsOrganized,
+  GridPolyMap,
+  IslandPolyIdsByCamera,
   PointIslandsByCamera,
   createVisualMarker,
   generateFloorPoints,
@@ -46,6 +48,11 @@ import { calculateCameraScore, calculateRelativeDistanceScores } from "./browser
 import { findIslandsFromPoints } from "./browser/findIslandsFromPoints";
 import { createAndExtrudeMesh } from "./browser/createAndExtrudeMesh";
 import { generateTrianglesFromPoints } from "./browser/generateTrianglesFromPoints";
+import {
+  findGridPolyForGridPoint,
+  findGridPolysForIsland,
+  findPolyTypeFromPoints,
+} from "./browser/findGridPolysForIsland";
 
 type ModelFile = {
   meshes: Record<string, AbstractMesh>;
@@ -71,6 +78,8 @@ type PageRefs = {
   gridPointMap: GridPointMap;
   gridPointsOrganized: GridPointsOrganized;
   pointIslandsByCamera: PointIslandsByCamera;
+  gridPolyMap: GridPolyMap;
+  islandPolyIdsByCamera: IslandPolyIdsByCamera;
 
   // imports for browser
   delay: (time: number) => Promise<void>;
@@ -96,6 +105,9 @@ type PageRefs = {
   createAndExtrudeMesh: typeof createAndExtrudeMesh;
   getSimplifiedPoint: typeof getSimplifiedPoint;
   filterMap: typeof filterMap;
+  findGridPolyForGridPoint: typeof findGridPolyForGridPoint;
+  findGridPolysForIsland: typeof findGridPolysForIsland;
+  findPolyTypeFromPoints: typeof findPolyTypeFromPoints;
 };
 
 export const nodeRefs = {
