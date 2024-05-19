@@ -34,4 +34,8 @@ export function setUpBabylonScene() {
   camera.setTarget(BABYLON.Vector3.Zero());
   camera.attachControl(canvas, true);
   engine.setSize(1920, 1080);
+
+  pageRefs.freeCamera = camera;
+  // This attaches the camera to the canvas
+  camera.attachControl(canvas, true);
 }

@@ -5,6 +5,7 @@ import {
   AssetContainer,
   Camera,
   Engine,
+  FreeCamera,
   Mesh,
   PBRMaterial,
   PostProcess,
@@ -70,6 +71,7 @@ type PageRefs = {
   canvas?: HTMLCanvasElement;
   engine?: Engine;
   scene?: Scene;
+  freeCamera?: FreeCamera;
   modelFile?: ModelFile;
   depthPostProcess?: PostProcess;
   placeDetailGlbPath?: string;

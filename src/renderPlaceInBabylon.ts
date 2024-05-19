@@ -105,5 +105,9 @@ export async function renderPlaceInBabylon({
   // ------------------------------------------------
 
   // close the browser
+
   await browser.close();
+  // setTimeout(async () => {
+  //   await browser.close();
+  // }, 60000);
 }

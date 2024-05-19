@@ -15,6 +15,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     modelFile,
     delay,
     scene,
+    freeCamera,
     canvas,
     BABYLON,
     countWhitePixels,
@@ -40,8 +41,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
   } = window.pageRefs;
   if (!scene || !modelFile || !BABYLON || !canvas) return;
 
-  const GRID_SPACE = 2; // space between grid points, in meters, more space means less points to check
-  const RESOLUTION_LEVEL = 3; // higher resolution means more pixels to check, so more accurate but slower
+  const GRID_SPACE = 1; // space between grid points, in meters, more space means less points to check
+  const RESOLUTION_LEVEL = 2; // higher resolution means more pixels to check, so more accurate but slower
 
   //   const TEST_POINT_INDEX = 8;
   const TEST_POINT_INDEX = -1;
@@ -303,6 +304,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     const pointsByIsland = pointIslandsByCamera[camName];
     if (!pointsByIsland) continue;
 
+    let randomColor = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
+
     const camera = modelFile.cameras[camName] as FreeCamera;
     if (!camera) return;
     scene.activeCamera = camera;
@@ -316,7 +319,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       for (const pointId of islandPointIds) {
         const point = gridPointMap[pointId].point;
         if (!point) continue;
-        const color = new BABYLON.Color3(1, 1, 0);
+        // const color = new BABYLON.Color3(1, 1, 0);
+        const color = randomColor;
         visualMarkers.push(createVisualMarker(new BABYLON.Vector3(point.x, point.y, point.z), color));
       }
       scene.render();
@@ -329,8 +333,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       await delay(1);
 
       if (visualMarker) {
-        scene.removeMesh(visualMarker);
-        visualMarker.dispose();
+        // scene.removeMesh(visualMarker);
+        // visualMarker.dispose();
       }
     }
   }
@@ -388,15 +392,15 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       // NOTE reverse the points to make the triangles face the right way
 
       if (gridPoly.polyType === "quad") {
-        const triPointsA = [topLeftPoint, topRightPoint, bottomRightPoint].filter((p) => p) as Point3D[];
-        const triPointsB = [bottomRightPoint, bottomLeftPoint, topLeftPoint].filter((p) => p) as Point3D[];
+        const triPointsA = [topLeftPoint, topRightPoint, bottomRightPoint].filter((p) => p).reverse() as Point3D[];
+        const triPointsB = [bottomRightPoint, bottomLeftPoint, topLeftPoint].filter((p) => p).reverse() as Point3D[];
 
         triPoints.push(triPointsA);
         triPoints.push(triPointsB);
       } else {
-        const pointsToRender = [topLeftPoint, topRightPoint, bottomRightPoint, bottomLeftPoint].filter(
-          (p) => p
-        ) as Point3D[];
+        const pointsToRender = [topLeftPoint, topRightPoint, bottomRightPoint, bottomLeftPoint]
+          .filter((p) => p)
+          .reverse() as Point3D[];
 
         triPoints.push(pointsToRender);
       }
@@ -404,12 +408,58 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     return triPoints;
   }
 
+  const createTriMeshFromGridPolyIds = (gridPolyIds: GridPolyId[], scene: Scene): Mesh => {
+    const points: Point3D[][] = getTriPointsFromGridPolyIds(gridPolyIds);
+
+    console.log("--------------------------");
+    console.log("points");
+    console.log(points);
+
+    const uniqueVertices: Point3D[] = [];
+    const indices: number[] = [];
+
+    // Using an object to track vertex indices
+    const vertexLookup: { [key: string]: number } = {};
+
+    let index = 0;
+    points.forEach((triangle) => {
+      triangle.forEach((vertex) => {
+        const key = `${vertex.x}_${vertex.y}_${vertex.z}`; // Using underscore as the separator
+        if (vertexLookup[key] === undefined) {
+          uniqueVertices.push(vertex);
+          vertexLookup[key] = index++;
+        }
+        indices.push(vertexLookup[key]);
+      });
+    });
+
+    const positions: number[] = [];
+    const normals: number[] = [];
+
+    uniqueVertices.forEach((vertex) => {
+      positions.push(vertex.x, vertex.y, vertex.z);
+    });
+
+    BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+
+    const customMesh = new BABYLON.Mesh("custom", scene);
+    const vertexData = new BABYLON.VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = indices;
+    vertexData.normals = normals;
+    vertexData.applyToMesh(customMesh, true);
+
+    customMesh.movePOV(0, 0.2, 0);
+
+    return customMesh;
+  };
+
   /**
    * Function to identify outer edges from a list of triangles.
    */
-  function findOuterEdges(indices: number[]): Edge[] {
-    const edgeCount: { [key: string]: number } = {};
-    const edges: Edge[] = [];
+  function findOuterEdges(indices: number[]): { edge: Edge; triangleIndex: number }[] {
+    const edgeMap: { [key: string]: { count: number; triangleIndices: number[] } } = {};
+    const edges: { edge: Edge; triangleIndex: number }[] = [];
 
     for (let i = 0; i < indices.length; i += 3) {
       const triEdges = [
@@ -420,15 +470,48 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
 
       triEdges.forEach((edge) => {
         const key = edge.start < edge.end ? `${edge.start}_${edge.end}` : `${edge.end}_${edge.start}`;
-        if (edgeCount[key] === undefined) {
-          edgeCount[key] = 0;
-          edges.push(edge);
+        if (!edgeMap[key]) {
+          edgeMap[key] = { count: 0, triangleIndices: [] };
         }
-        edgeCount[key]++;
+        edgeMap[key].count++;
+        edgeMap[key].triangleIndices.push(i / 3); // Store the triangle index
       });
     }
 
-    return edges.filter((edge) => edgeCount[`${edge.start}_${edge.end}`] === 1);
+    Object.keys(edgeMap).forEach((key) => {
+      if (edgeMap[key].count === 1) {
+        // Only add edges that appear in one triangle
+        const edge = key.split("_").map(Number);
+        edges.push({ edge: { start: edge[0], end: edge[1] }, triangleIndex: edgeMap[key].triangleIndices[0] });
+      }
+    });
+
+    return edges;
+  }
+
+  function calculateNormals(vertices: Point3D[], indices: number[]): Point3D[] {
+    const normals: Point3D[] = [];
+
+    for (let i = 0; i < indices.length; i += 3) {
+      const p1 = vertices[indices[i]];
+      const p2 = vertices[indices[i + 1]];
+      const p3 = vertices[indices[i + 2]];
+      const normal = calculateNormal(p1, p2, p3);
+      normals.push(normal);
+    }
+
+    return normals;
+  }
+
+  function calculateNormal(v1: Point3D, v2: Point3D, v3: Point3D): Point3D {
+    const U = { x: v2.x - v1.x, y: v2.y - v1.y, z: v2.z - v1.z };
+    const V = { x: v3.x - v2.x, y: v3.y - v2.y, z: v3.z - v2.z };
+
+    return {
+      x: U.y * V.z - U.z * V.y,
+      y: U.z * V.x - U.x * V.z,
+      z: U.x * V.y - U.y * V.x,
+    };
   }
 
   /**
@@ -447,15 +530,25 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     const upperVertices = uniqueVertices.map((vertex) => ({ x: vertex.x, y: vertex.y + extrusionHeight, z: vertex.z }));
     const newVertices = uniqueVertices.concat(upperVertices);
 
+    // After computing unique vertices and indices
+    const customNormals = calculateNormals(uniqueVertices, indices);
+
     // Create side faces for extrusion
     const outerEdges = findOuterEdges(indices);
-    outerEdges.forEach((edge) => {
+    outerEdges.forEach(({ edge, triangleIndex }) => {
+      const normal = customNormals[triangleIndex];
+      const direction = Math.sign(normal.x + normal.y + normal.z); // Adjust this based on your coordinate system
+
       const upperStart = edge.start + totalVertices;
       const upperEnd = edge.end + totalVertices;
 
-      // Ensure the side faces are correctly oriented
-      indices.push(edge.start, upperStart, edge.end);
-      indices.push(edge.end, upperStart, upperEnd);
+      if (direction > 0) {
+        indices.push(edge.start, upperStart, edge.end);
+        indices.push(edge.end, upperStart, upperEnd);
+      } else {
+        indices.push(edge.start, edge.end, upperStart);
+        indices.push(edge.end, upperEnd, upperStart);
+      }
     });
 
     // Create and correct the top face
@@ -539,13 +632,18 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       if (!islandPolyIdsByCamera[camName]) islandPolyIdsByCamera[camName] = {};
       islandPolyIdsByCamera[camName][islandId] = foundIslandPolyIds;
 
-      const islandTriMesh = createExtrudedTriMeshFromGridPolyIds(foundIslandPolyIds, scene, 2);
+      const shouldKeepCamera = camNames.indexOf(camName) === camNames.length - 3;
+
+      // const islandTriMesh = createExtrudedTriMeshFromGridPolyIds(foundIslandPolyIds, scene, 0.2);
+      const islandTriMesh = createTriMeshFromGridPolyIds(foundIslandPolyIds, scene);
       madeMeshes.push(islandTriMesh);
       scene.render();
       await delay(1);
       scene.render();
       await delay(CHECK_WAIT_TIME);
-      madeMeshes.forEach((m) => m.dispose());
+      if (!shouldKeepCamera) {
+        madeMeshes.forEach((m) => m.dispose());
+      }
       scene.render();
       // for (const polyId of foundIslandPolyIds) {
       //   // make a random color
@@ -564,6 +662,31 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     }
   }
 
+  console.log("set free camera");
+
+  if (freeCamera) {
+    scene.activeCamera = freeCamera;
+  }
+
+  // hide the scene meshes
+  modelFile.transformNodes.details.setEnabled(false);
+
+  // loop 3 times
+  for (let i = 0; i < 3; i++) {
+    for (const camName of camNames) {
+      const pointsByIsland = pointIslandsByCamera[camName];
+      if (!pointsByIsland) continue;
+
+      const camera = modelFile.cameras[camName] as FreeCamera;
+      if (!camera) return;
+      scene.activeCamera = camera;
+      scene.render();
+      await delay(1);
+      scene.render();
+      await delay(CHECK_WAIT_TIME * 2);
+    }
+  }
+
   // createAndExtrudeMesh
-  await delay(2000);
+  // await delay(2000);
 }
