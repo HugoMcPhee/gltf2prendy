@@ -5,6 +5,11 @@ import { Point3D } from "chootils/dist/points3d";
 
 export type IdPoint3D = { x: number; y: number; z: number; id: string };
 
+export type Edge = {
+  start: number; // Index of the start vertex
+  end: number; // Index of the end vertex
+};
+
 export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInfo: PointsInfo) {
   const {
     modelFile,
@@ -383,15 +388,15 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       // NOTE reverse the points to make the triangles face the right way
 
       if (gridPoly.polyType === "quad") {
-        const triPointsA = [topLeftPoint, topRightPoint, bottomRightPoint].filter((p) => p).reverse() as Point3D[];
-        const triPointsB = [bottomRightPoint, bottomLeftPoint, topLeftPoint].filter((p) => p).reverse() as Point3D[];
+        const triPointsA = [topLeftPoint, topRightPoint, bottomRightPoint].filter((p) => p) as Point3D[];
+        const triPointsB = [bottomRightPoint, bottomLeftPoint, topLeftPoint].filter((p) => p) as Point3D[];
 
         triPoints.push(triPointsA);
         triPoints.push(triPointsB);
       } else {
-        const pointsToRender = [topLeftPoint, topRightPoint, bottomRightPoint, bottomLeftPoint]
-          .filter((p) => p)
-          .reverse() as Point3D[];
+        const pointsToRender = [topLeftPoint, topRightPoint, bottomRightPoint, bottomLeftPoint].filter(
+          (p) => p
+        ) as Point3D[];
 
         triPoints.push(pointsToRender);
       }
@@ -399,23 +404,100 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
     return triPoints;
   }
 
-  const createTriMeshFromGridPolyIds = (gridPolyIds: GridPolyId[], scene: Scene): Mesh => {
+  /**
+   * Function to identify outer edges from a list of triangles.
+   */
+  function findOuterEdges(indices: number[]): Edge[] {
+    const edgeCount: { [key: string]: number } = {};
+    const edges: Edge[] = [];
+
+    for (let i = 0; i < indices.length; i += 3) {
+      const triEdges = [
+        { start: indices[i], end: indices[i + 1] },
+        { start: indices[i + 1], end: indices[i + 2] },
+        { start: indices[i + 2], end: indices[i] },
+      ];
+
+      triEdges.forEach((edge) => {
+        const key = edge.start < edge.end ? `${edge.start}_${edge.end}` : `${edge.end}_${edge.start}`;
+        if (edgeCount[key] === undefined) {
+          edgeCount[key] = 0;
+          edges.push(edge);
+        }
+        edgeCount[key]++;
+      });
+    }
+
+    return edges.filter((edge) => edgeCount[`${edge.start}_${edge.end}`] === 1);
+  }
+
+  /**
+   * Main function to create extruded terrain mesh.
+   */
+  const createExtrudedTriMeshFromGridPolyIds = (
+    gridPolyIds: GridPolyId[],
+    scene: Scene,
+    extrusionHeight: number = 1
+  ): Mesh => {
     const points: Point3D[][] = getTriPointsFromGridPolyIds(gridPolyIds);
+    const { uniqueVertices, indices } = buildUniqueVerticesAndIndices(points);
 
-    console.log("--------------------------");
-    console.log("points");
-    console.log(points);
+    // Duplicate vertices upwards
+    const totalVertices = uniqueVertices.length;
+    const upperVertices = uniqueVertices.map((vertex) => ({ x: vertex.x, y: vertex.y + extrusionHeight, z: vertex.z }));
+    const newVertices = uniqueVertices.concat(upperVertices);
 
+    // Create side faces for extrusion
+    const outerEdges = findOuterEdges(indices);
+    outerEdges.forEach((edge) => {
+      const upperStart = edge.start + totalVertices;
+      const upperEnd = edge.end + totalVertices;
+
+      // Ensure the side faces are correctly oriented
+      indices.push(edge.start, upperStart, edge.end);
+      indices.push(edge.end, upperStart, upperEnd);
+    });
+
+    // Create and correct the top face
+    const upperIndices = indices.slice(0, indices.length / 2).map((index) => index + totalVertices);
+    for (let i = 0; i < upperIndices.length; i += 3) {
+      // Reverse winding order for each triangle of the top face
+      const temp = upperIndices[i + 1];
+      upperIndices[i + 1] = upperIndices[i + 2];
+      upperIndices[i + 2] = temp;
+    }
+
+    // Concatenate the corrected top face indices
+    indices.push(...upperIndices);
+
+    // Recompute normals with new geometry
+    const positions = newVertices.flatMap((vertex) => [vertex.x, vertex.y, vertex.z]);
+    const normals: number[] = [];
+    BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+
+    // Apply vertex data to the custom mesh
+    const customMesh = new BABYLON.Mesh("customExtruded", scene);
+    const vertexData = new BABYLON.VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = indices;
+    vertexData.normals = normals;
+    vertexData.applyToMesh(customMesh, true);
+
+    return customMesh;
+  };
+
+  /**
+   * Helper function to build unique vertices and their indices.
+   */
+  function buildUniqueVerticesAndIndices(points: Point3D[][]): { uniqueVertices: Point3D[]; indices: number[] } {
     const uniqueVertices: Point3D[] = [];
     const indices: number[] = [];
-
-    // Using an object to track vertex indices
     const vertexLookup: { [key: string]: number } = {};
 
     let index = 0;
     points.forEach((triangle) => {
       triangle.forEach((vertex) => {
-        const key = `${vertex.x}_${vertex.y}_${vertex.z}`; // Using underscore as the separator
+        const key = `${vertex.x}_${vertex.y}_${vertex.z}`;
         if (vertexLookup[key] === undefined) {
           uniqueVertices.push(vertex);
           vertexLookup[key] = index++;
@@ -424,26 +506,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       });
     });
 
-    const positions: number[] = [];
-    const normals: number[] = [];
-
-    uniqueVertices.forEach((vertex) => {
-      positions.push(vertex.x, vertex.y, vertex.z);
-    });
-
-    BABYLON.VertexData.ComputeNormals(positions, indices, normals);
-
-    const customMesh = new BABYLON.Mesh("custom", scene);
-    const vertexData = new BABYLON.VertexData();
-    vertexData.positions = positions;
-    vertexData.indices = indices;
-    vertexData.normals = normals;
-    vertexData.applyToMesh(customMesh, true);
-
-    customMesh.movePOV(0, 1, 0);
-
-    return customMesh;
-  };
+    return { uniqueVertices, indices };
+  }
 
   //   for each camera, for each isalnd, get the island poly data
   for (const camName of camNames) {
@@ -475,7 +539,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo, pointsInf
       if (!islandPolyIdsByCamera[camName]) islandPolyIdsByCamera[camName] = {};
       islandPolyIdsByCamera[camName][islandId] = foundIslandPolyIds;
 
-      const islandTriMesh = createTriMeshFromGridPolyIds(foundIslandPolyIds, scene);
+      const islandTriMesh = createExtrudedTriMeshFromGridPolyIds(foundIslandPolyIds, scene, 2);
       madeMeshes.push(islandTriMesh);
       scene.render();
       await delay(1);
