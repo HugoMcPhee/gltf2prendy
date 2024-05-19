@@ -1,14 +1,21 @@
 import { relative } from "path/posix";
-import { PointsInfo } from "..";
+import { PointCamInfo, PointsInfo } from "..";
 
 type CameraData = {
   visibility: number; // 0 to 1, where 1 means fully visible
-  screenOccupancy: number; // 0 to 1, represents the percentage of the screen the character occupies
+  screenCovered: number; // 0 to 1, represents the percentage of the screen the character occupies
   distance: number; // Raw distance from the camera to the character
-  relativeDistanceScore: number; // 0 to 1, where 1 is closest distance
+  relativeDistance: number; // 0 to 1, where 1 is closest distance
 };
 
-export function calculateCameraScore(data: CameraData): number {
+export function calculateCameraScore(pointCamInfo: PointCamInfo): number {
+  const data: CameraData = {
+    visibility: pointCamInfo.visibilityScore,
+    screenCovered: pointCamInfo.screenCoverage,
+    distance: pointCamInfo.characterDistance,
+    relativeDistance: pointCamInfo.relativeDistanceScore,
+  };
+
   // Constants for weight - these might need to be adjusted based on testing and gameplay feedback
   const visibilityWeight = 0.3;
   const occupancyWeight = 0.9;
@@ -20,7 +27,7 @@ export function calculateCameraScore(data: CameraData): number {
   const optimalMaxDistance = 20;
   let normalizedDistanceScore: number;
 
-  console.log("distance", data.distance);
+  // console.log("distance", data.distance);
 
   if (data.distance < optimalMinDistance) {
     normalizedDistanceScore = data.distance / optimalMinDistance; // Decreases as distance decreases below min
@@ -33,12 +40,12 @@ export function calculateCameraScore(data: CameraData): number {
   // Calculate total score
   const totalScore =
     data.visibility * visibilityWeight +
-    data.screenOccupancy * occupancyWeight +
+    data.screenCovered * occupancyWeight +
     normalizedDistanceScore * distanceWeight;
 
   // return totalScore * (1 + data.relativeDistanceScore) - totalScore / 2;
 
-  return totalScore * (0.5 + data.relativeDistanceScore);
+  return totalScore * (0.5 + data.relativeDistance);
 }
 
 export function calculateRelativeDistanceScores(pointsInfo: PointsInfo): void {

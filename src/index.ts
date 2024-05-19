@@ -14,7 +14,7 @@ import {
   TransformNode,
 } from "@babylonjs/core";
 import { createFFmpeg } from "@ffmpeg.wasm/main";
-import { keyBy } from "chootils/dist/arrays";
+import { filterMap, keyBy } from "chootils/dist/arrays";
 import { forEach } from "chootils/dist/loops";
 import fs from "fs/promises";
 import { BABYLON } from "./browser/browser";
@@ -31,7 +31,14 @@ import { splitFolderPath } from "./paths";
 import { readAndSavePlaceGltf } from "./readAndSavePlaceGltf";
 import { renderPlaceInBabylon } from "./renderPlaceInBabylon";
 import { countWhitePixels } from "./browser/countWhitePixels";
-import { createVisualMarker, generateFloorPoints, getSimplifiedPoint } from "./browser/findPointsOnFloors";
+import {
+  GridPointMap,
+  GridPointsOrganized,
+  PointIslandsByCamera,
+  createVisualMarker,
+  generateFloorPoints,
+  getSimplifiedPoint,
+} from "./browser/findPointsOnFloors";
 import { setupFakeCharacter } from "./browser/setupFakeCharacter";
 import { applyBlackMaterialToDetails } from "./browser/applyBlackMaterialToDetails";
 import { getFovScaleFactor } from "./browser/getFovScaleFactor";
@@ -60,6 +67,11 @@ type PageRefs = {
   depthPostProcess?: PostProcess;
   placeDetailGlbPath?: string;
   fakeCharacter?: Mesh;
+
+  gridPointMap: GridPointMap;
+  gridPointsOrganized: GridPointsOrganized;
+  pointIslandsByCamera: PointIslandsByCamera;
+
   // imports for browser
   delay: (time: number) => Promise<void>;
   forEach: typeof forEach;
@@ -83,6 +95,7 @@ type PageRefs = {
   generateTrianglesFromPoints: typeof generateTrianglesFromPoints;
   createAndExtrudeMesh: typeof createAndExtrudeMesh;
   getSimplifiedPoint: typeof getSimplifiedPoint;
+  filterMap: typeof filterMap;
 };
 
 export const nodeRefs = {
@@ -106,22 +119,20 @@ export type PlaceInfo = {
   // might need extra info about cams etc
 };
 
+export type PointCamInfo = {
+  screenCoverage: number;
+  visibilityScore: number;
+  characterDistance: number;
+  relativeDistanceScore: number; // 0 to 1, where 1 is closest distance
+  cameraScore: number; // cameraScore is made of the other scores mostly, but potentially also other influences
+};
+
 export type PointsInfo = Record<
-  string, // point key, its the x,y,z of the point as a string
+  string, // point key, its the x_y_z of the point as a string
   {
     point: [number, number, number]; // x y z
-    camInfos: Record<
-      string, // camera name (4 cameras for example)
-      {
-        screenCoverage: number;
-        visibilityScore: number;
-        characterDistance: number;
-        relativeDistanceScore: number; // 0 to 1, where 1 is closest distance
-        cameraScore: number;
-      } // cameraScore is made of the other scores mostly, but potentially also other influences
-    >;
-    bestCam1: string;
-    bestCam2: string;
+    camInfos: Record<string, PointCamInfo>; // Camera name to cam info
+    bestCam: string;
   }
 >;
 

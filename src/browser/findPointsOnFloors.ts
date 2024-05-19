@@ -7,13 +7,44 @@ export type GridPoint = {
   point: Point3D | undefined;
   gridX: number;
   gridZ: number;
+  layer: number; // 0 is the lowest ray found, 1 is the second, etc, so points on different layers are not connected
 };
 
-type X_Index = string;
-type Z_Index = string;
+export type X_Index = string;
+export type Z_Index = string;
+export type GridPointId = string;
+export type GridPolyId = string;
+export type IslandIndex = string;
+export type CamName = string;
 
-export type GridPointMap = Record<string, GridPoint>;
-export type GridPointsOrganized = Record<X_Index, Record<Z_Index, GridPoint[]>>;
+export type GridPointMap = Record<GridPointId, GridPoint>;
+export type GridPointsOrganized = Record<X_Index, Record<Z_Index, GridPointId[]>>;
+export type PointIslandsByCamera = Record<CamName, Record<IslandIndex, GridPointId[]>>;
+
+export type PolyType = "quad" | "triDownLeft" | "triUpLeft" | "triUpRight" | "triDownRight" | "empty";
+
+export type GridPoly = {
+  id: string;
+  polyType: PolyType;
+  pointIds: {
+    topLeft?: string;
+    topRight?: string;
+    bottomLeft?: string;
+    bottomRight?: string;
+  };
+  gridX: number;
+  gridZ: number;
+  layer: number;
+};
+
+export type GridTri = {
+  id: string;
+  polyType: PolyType;
+  pointIds: string[];
+};
+
+export type GridPolyMap = Record<string, GridPoly>;
+export type GridPolyIdsByCamIslands = Record<CamName, Record<IslandIndex, GridPolyId[]>>;
 
 export function getSimplifiedPoint(vectorPoint: Vector3) {
   const { x: realX, y: realY, z: realZ } = vectorPoint;
@@ -24,17 +55,12 @@ export function getSimplifiedPoint(vectorPoint: Vector3) {
 }
 
 // Function to create the grid of points and cast rays
-export async function generateFloorPoints(gridDistance: number = 1): Promise<Vector3[]> {
-  const gridPointMap: GridPointMap = {};
-  const gridPointsOrganized: GridPointsOrganized = {};
-
+export async function generateFloorPoints(gridDistance: number = 1) {
+  const { BABYLON, scene, modelFile, gridPointMap, gridPointsOrganized } = window.pageRefs;
   const foundPoints: Vector3[] = [];
-
-  const { BABYLON, scene, modelFile } = window.pageRefs;
-
   const transformNode = modelFile?.transformNodes.floors;
 
-  if (!transformNode || !scene || !BABYLON) return foundPoints;
+  if (!transformNode || !scene || !BABYLON) return { gridPointMap, gridPointsOrganized };
   transformNode.setEnabled(true);
 
   // Calculate the bounding box for all meshes in the TransformNode
@@ -48,11 +74,15 @@ export async function generateFloorPoints(gridDistance: number = 1): Promise<Vec
     max = Vector3.Maximize(max, boundingBox.maximumWorld);
   });
 
-  // const gridPointId = `${x}_${z}`;
+  let xIndex = -1;
 
   // Create grid of points and cast rays
   for (let x = min.x; x <= max.x; x += gridDistance) {
+    xIndex++;
+    let zIndex = -1;
     for (let z = min.z; z <= max.z; z += gridDistance) {
+      zIndex++;
+
       const rayOrigin = new BABYLON.Vector3(x, max.y + 1, z);
       const rayDirection = new BABYLON.Vector3(0, -1, 0);
       const ray = new BABYLON.Ray(rayOrigin, rayDirection, max.y - min.y + 2);
@@ -60,15 +90,25 @@ export async function generateFloorPoints(gridDistance: number = 1): Promise<Vec
       // Using multiPickWithRay to find all intersections along the ray
       const pickInfos = scene.multiPickWithRay(ray, (mesh) => transformNode.getChildMeshes().includes(mesh));
       if (pickInfos && pickInfos.length > 0) {
+        // find the total number of picks with a hit
+        const hitAmount = pickInfos.filter((pickInfo) => pickInfo.hit).length;
+        let layerCounter = hitAmount;
+
         pickInfos.forEach((pickInfo) => {
           if (pickInfo.hit && pickInfo.pickedPoint) {
-            const gridPointId = `${x}_${z}_${pickInfo.pickedPoint.y}`;
-            gridPointMap[gridPointId] = {
+            const point = getSimplifiedPoint(pickInfo.pickedPoint);
+            const gridPointId = `${point.x}_${point.z}_${point.y}`;
+            const gridPoint: GridPoint = {
               id: gridPointId,
-              point: getSimplifiedPoint(pickInfo.pickedPoint),
-              gridX: x,
-              gridZ: z,
+              point,
+              gridX: xIndex,
+              gridZ: zIndex,
+              layer: layerCounter--,
             };
+            gridPointMap[gridPointId] = gridPoint;
+            if (!gridPointsOrganized[xIndex]) gridPointsOrganized[xIndex] = {};
+            if (!gridPointsOrganized[xIndex][zIndex]) gridPointsOrganized[xIndex][zIndex] = [];
+            gridPointsOrganized[xIndex][zIndex].push(gridPointId);
 
             foundPoints.push(pickInfo.pickedPoint);
             // Optionally create visual markers for each point
@@ -81,7 +121,7 @@ export async function generateFloorPoints(gridDistance: number = 1): Promise<Vec
 
   transformNode.setEnabled(false);
 
-  return foundPoints;
+  return { gridPointMap, gridPointsOrganized };
 }
 
 // Function to create a visual marker at a point

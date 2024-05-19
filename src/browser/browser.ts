@@ -46,6 +46,7 @@ import { calculateCameraScore, calculateRelativeDistanceScores } from "./calcula
 import { findIslandsFromPoints } from "./findIslandsFromPoints";
 import { createAndExtrudeMesh } from "./createAndExtrudeMesh";
 import { generateTrianglesFromPoints } from "./generateTrianglesFromPoints";
+import { filterMap } from "chootils/dist/arrays";
 
 // Expose everything on window.pageRefs
 
@@ -80,6 +81,10 @@ export const BABYLON = {
 };
 
 export const pageRefs = {
+  gridPointMap: {},
+  gridPointsOrganized: {},
+  pointIslandsByCamera: {},
+  //
   handleGltfModel,
   forEach,
   keyBy,
@@ -101,6 +106,7 @@ export const pageRefs = {
   generateTrianglesFromPoints,
   createAndExtrudeMesh,
   getSimplifiedPoint,
+  filterMap,
   delay: async (time: number) => new Promise((resolve) => setTimeout(resolve, time)),
 };
 
