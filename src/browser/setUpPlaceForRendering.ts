@@ -1,7 +1,7 @@
 import { ShaderStore } from "@babylonjs/core";
 import { PlaceInfo } from "..";
-import { loadModelFile } from "./loadModelFile";
-import { setupFakeCharacter } from "./setupFakeCharacter";
+import { loadModelFile } from "./loadModelFile/loadModelFile";
+import { setupFakeCharacter } from "./getCharacterVisibilityData/setupFakeCharacter";
 import { shaders } from "./shaders";
 
 export async function setUpPlaceForRendering({

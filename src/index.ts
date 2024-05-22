@@ -1,116 +1,13 @@
 #!/usr/bin/env node
-import {
-  AbstractMesh,
-  AnimationGroup,
-  AssetContainer,
-  Camera,
-  Engine,
-  FreeCamera,
-  Mesh,
-  PBRMaterial,
-  PostProcess,
-  Scene,
-  Skeleton,
-  Texture,
-  TransformNode,
-} from "@babylonjs/core";
 import { createFFmpeg } from "@ffmpeg.wasm/main";
-import { filterMap, keyBy } from "chootils/dist/arrays";
-import { forEach } from "chootils/dist/loops";
 import fs from "fs/promises";
-import { BABYLON } from "./browser/browser";
-import { getFileFromBase64 } from "./browser/getFileFromBase64";
-import { handleGltfModel } from "./browser/handleGltfModel";
-import { loadModelFile } from "./browser/loadModelFile";
-import { setUpBabylonScene } from "./browser/setUpBabylonScene";
-import { shaders } from "./browser/shaders";
-import { waitForSceneReady } from "./browser/waitForSceneReady";
+import { PageRefs } from "./browser/browser";
 import { checkFiles } from "./checkFiles";
 import { makePlaceTypescriptFile, makePlacesTypescriptFile } from "./makeTypescriptFiles";
 import { makeVideoFromPics } from "./makeVideoFromPics";
 import { splitFolderPath } from "./paths";
 import { readAndSavePlaceGltf } from "./readAndSavePlaceGltf";
 import { renderPlaceInBabylon } from "./renderPlaceInBabylon";
-import { countWhitePixels } from "./browser/countWhitePixels";
-import {
-  GridPointMap,
-  GridPointsOrganized,
-  GridPolyMap,
-  IslandPolyIdsByCamera,
-  PointIslandsByCamera,
-  createVisualMarker,
-  generateFloorPoints,
-  getSimplifiedPoint,
-} from "./browser/findPointsOnFloors";
-import { setupFakeCharacter } from "./browser/setupFakeCharacter";
-import { applyBlackMaterialToDetails } from "./browser/applyBlackMaterialToDetails";
-import { getFovScaleFactor } from "./browser/getFovScaleFactor";
-import { calculateCameraScore, calculateRelativeDistanceScores } from "./browser/calculateCameraScore";
-import { findIslandsFromPoints } from "./browser/findIslandsFromPoints";
-import { createAndExtrudeMesh } from "./browser/createAndExtrudeMesh";
-import { generateTrianglesFromPoints } from "./browser/generateTrianglesFromPoints";
-import {
-  findGridPolyForGridPoint,
-  findGridPolysForIsland,
-  findPolyTypeFromPoints,
-} from "./browser/findGridPolysForIsland";
-
-type ModelFile = {
-  meshes: Record<string, AbstractMesh>;
-  materials: Record<string, PBRMaterial>;
-  textures: Record<string, Texture>;
-  transformNodes: Record<string, TransformNode>;
-  animationGroups: Record<string, AnimationGroup>;
-  skeletons: Record<string, Skeleton>;
-  cameras: Record<string, Camera>;
-  container: AssetContainer;
-};
-
-type PageRefs = {
-  // data
-  canvas?: HTMLCanvasElement;
-  engine?: Engine;
-  scene?: Scene;
-  freeCamera?: FreeCamera;
-  modelFile?: ModelFile;
-  depthPostProcess?: PostProcess;
-  placeDetailGlbPath?: string;
-  fakeCharacter?: Mesh;
-
-  gridPointMap: GridPointMap;
-  gridPointsOrganized: GridPointsOrganized;
-  pointIslandsByCamera: PointIslandsByCamera;
-  gridPolyMap: GridPolyMap;
-  islandPolyIdsByCamera: IslandPolyIdsByCamera;
-
-  // imports for browser
-  delay: (time: number) => Promise<void>;
-  forEach: typeof forEach;
-  keyBy: typeof keyBy;
-  getFileFromBase64: typeof getFileFromBase64;
-  loadModelFile: typeof loadModelFile;
-  BABYLON: typeof BABYLON;
-  shaders: typeof shaders;
-  handleGltfModel: typeof handleGltfModel;
-  waitForSceneReady: typeof waitForSceneReady;
-  setUpBabylonScene: typeof setUpBabylonScene;
-  countWhitePixels: typeof countWhitePixels;
-  setupFakeCharacter: typeof setupFakeCharacter;
-  generateFloorPoints: typeof generateFloorPoints;
-  applyBlackMaterialToDetails: typeof applyBlackMaterialToDetails;
-  getFovScaleFactor: typeof getFovScaleFactor;
-  calculateCameraScore: typeof calculateCameraScore;
-  createVisualMarker: typeof createVisualMarker;
-  calculateRelativeDistanceScores: typeof calculateRelativeDistanceScores;
-  findIslandsFromPoints: typeof findIslandsFromPoints;
-  generateTrianglesFromPoints: typeof generateTrianglesFromPoints;
-  createAndExtrudeMesh: typeof createAndExtrudeMesh;
-  getSimplifiedPoint: typeof getSimplifiedPoint;
-  filterMap: typeof filterMap;
-  findGridPolyForGridPoint: typeof findGridPolyForGridPoint;
-  findGridPolysForIsland: typeof findGridPolysForIsland;
-  findPolyTypeFromPoints: typeof findPolyTypeFromPoints;
-};
 
 export const nodeRefs = {
   placeDetailGlbPath: "",
@@ -132,23 +29,6 @@ export type PlaceInfo = {
   floorNames: string[];
   // might need extra info about cams etc
 };
-
-export type PointCamInfo = {
-  screenCoverage: number;
-  visibilityScore: number;
-  characterDistance: number;
-  relativeDistanceScore: number; // 0 to 1, where 1 is closest distance
-  cameraScore: number; // cameraScore is made of the other scores mostly, but potentially also other influences
-};
-
-export type PointsInfo = Record<
-  string, // point key, its the x_y_z of the point as a string
-  {
-    point: [number, number, number]; // x y z
-    camInfos: Record<string, PointCamInfo>; // Camera name to cam info
-    bestCam: string;
-  }
->;
 
 export type HDRFileProbeData = { name: string; data: string };
 export type EnvFileData = { name: string; data: string | ArrayBuffer | null };
@@ -195,7 +75,7 @@ const ffmpeg = createFFmpeg({ log: true });
     soundspotNames: [],
   };
 
-  const pointsInfo = {} as PointsInfo;
+  // const pointsInfo = {} as PointsInfo;
 
   await checkFiles({
     folderPath,
@@ -222,7 +102,7 @@ const ffmpeg = createFFmpeg({ log: true });
   // Render pics in babylonjs
   // ------------------------------------------------
 
-  await renderPlaceInBabylon({ placeInfo, gltfFilesData, pointsInfo });
+  await renderPlaceInBabylon({ placeInfo, gltfFilesData });
 
   if (false) {
     // find the images and load into ffmpeg stuff

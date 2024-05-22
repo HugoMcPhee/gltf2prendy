@@ -1,17 +1,16 @@
-import puppeteer from "puppeteer";
-import { GltfFilesData, PlaceInfo, PointsInfo } from ".";
-import { getCameraColorScreenshot, getCameraDepthScreenshot } from "./browser/getScreenshots";
-import delay from "delay";
-import { getCharacterVisibilityData } from "./browser/getCharacterVisiblityData";
+import puppeteer, { PuppeteerLaunchOptions } from "puppeteer";
+import { GltfFilesData, PlaceInfo } from ".";
+import { getCharacterVisibilityData } from "./browser/getCharacterVisibilityData/getCharacterVisiblityData";
+import { getCameraColorScreenshot, getCameraDepthScreenshot } from "./browser/getRenderScreenshots";
 
 export async function renderPlaceInBabylon({
   gltfFilesData,
   placeInfo,
-  pointsInfo,
-}: {
+}: // pointsInfo,
+{
   gltfFilesData: GltfFilesData;
   placeInfo: PlaceInfo;
-  pointsInfo: PointsInfo;
+  // pointsInfo: PointsInfo;
 }) {
   // Reccomended pupeteer args by babylonjs, not used yet
   // Don't disable the gpu
@@ -23,7 +22,7 @@ export async function renderPlaceInBabylon({
   args.push(`--window-size=1000,1000`);
 
   // Lanch pupeteer with custom arguments
-  let launchOptions = {
+  let launchOptions: PuppeteerLaunchOptions = {
     headless: false,
     // headless: true,
     // ignoreDefaultArgs: true,
@@ -31,15 +30,24 @@ export async function renderPlaceInBabylon({
     // args,
     args: [`--window-size=1920,1080`],
     defaultViewport: null,
+    userDataDir: "./tmp",
   };
 
   const browser = await puppeteer.launch(launchOptions);
 
   const page = await browser.newPage();
 
+  await page.setRequestInterception(true);
+  page.on("request", (request) => {
+    request.respond({ status: 200, contentType: "text/html", body: "<html></html>" });
+  });
+
+  await page.goto("http://127.0.0.1", { timeout: 0 });
+
   await page.addStyleTag({
     content: `body{ margin: 0 !important; width: 1920px; height: 1080px}`,
   });
+
   // await page.addScriptTag({ url: "https://cdn.babylonjs.com/babylon.js" });
   // await page.addScriptTag({
   //   url: "https://cdn.babylonjs.com/babylon.max.js",
@@ -64,7 +72,9 @@ export async function renderPlaceInBabylon({
 
         // await window.pageRefs.delay(10000);
 
-        const { handleGltfModel, waitForSceneReady, setUpBabylonScene } = window.pageRefs;
+        const { handleGltfModel, waitForSceneReady, setUpBabylonScene, delay } = window.pageRefs;
+
+        await delay(1000);
 
         setUpBabylonScene();
 
@@ -98,7 +108,7 @@ export async function renderPlaceInBabylon({
     }
   }
 
-  await page.evaluate(getCharacterVisibilityData, placeInfo, pointsInfo);
+  await page.evaluate(getCharacterVisibilityData, placeInfo);
 
   // ------------------------------------------------
   // Create videos from pic renders

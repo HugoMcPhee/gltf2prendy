@@ -1,37 +1,6 @@
-import puppeteer from "puppeteer";
-import { vec3 } from "@gltf-transform/core";
 import fs from "fs/promises";
 import path from "path";
-import {
-  AbstractMesh,
-  AnimationGroup,
-  AssetContainer,
-  Camera,
-  Engine,
-  PBRMaterial,
-  PostProcess,
-  Scene,
-  Skeleton,
-  Texture,
-  TransformNode,
-} from "@babylonjs/core";
-import { createFFmpeg } from "@ffmpeg.wasm/main";
-import { keyBy } from "chootils/dist/arrays";
-import { forEach } from "chootils/dist/loops";
-import { BABYLON } from "./browser/browser";
-import { getFileFromBase64 } from "./browser/getFileFromBase64";
-import { getCameraColorScreenshot, getCameraDepthScreenshot } from "./browser/getScreenshots";
-import { handleGltfModel } from "./browser/handleGltfModel";
-import { loadModelFile } from "./browser/loadModelFile";
-import { setUpBabylonScene } from "./browser/setUpBabylonScene";
-import { shaders } from "./browser/shaders";
-import { waitForSceneReady } from "./browser/waitForSceneReady";
-import { makePlaceTypescriptFile, makePlacesTypescriptFile } from "./makeTypescriptFiles";
-import { makeVideoFromPics } from "./makeVideoFromPics";
-import { splitFolderPath } from "./paths";
-import { readAndSavePlaceGltf } from "./readAndSavePlaceGltf";
-import { renderPlaceInBabylon } from "./renderPlaceInBabylon";
-import { HDRFileProbeData, GltfFilesData, nodeRefs } from ".";
+import { GltfFilesData, HDRFileProbeData, nodeRefs } from ".";
 
 export async function checkFiles({
   folderPath,
