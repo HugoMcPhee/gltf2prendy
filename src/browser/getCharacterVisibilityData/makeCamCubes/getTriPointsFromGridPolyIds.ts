@@ -23,15 +23,15 @@ export function getTriPointsFromGridPolyIds(gridPolyIds: string[]) {
     // NOTE reverse the points to make the triangles face the right way
 
     if (gridPoly.polyType === "quad") {
-      const triPointsA = [topLeftPoint, topRightPoint, bottomRightPoint].filter((p) => p).reverse() as Point3D[];
-      const triPointsB = [bottomRightPoint, bottomLeftPoint, topLeftPoint].filter((p) => p).reverse() as Point3D[];
+      const triPointsA = [topLeftPoint, topRightPoint, bottomRightPoint].filter((p) => p) as Point3D[];
+      const triPointsB = [bottomRightPoint, bottomLeftPoint, topLeftPoint].filter((p) => p) as Point3D[];
 
       triPoints.push(triPointsA);
       triPoints.push(triPointsB);
     } else {
-      const pointsToRender = [topLeftPoint, topRightPoint, bottomRightPoint, bottomLeftPoint]
-        .filter((p) => p)
-        .reverse() as Point3D[];
+      const pointsToRender = [topLeftPoint, topRightPoint, bottomRightPoint, bottomLeftPoint].filter(
+        (p) => p
+      ) as Point3D[];
 
       triPoints.push(pointsToRender);
     }

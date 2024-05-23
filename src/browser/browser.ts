@@ -68,6 +68,8 @@ import { renderDebugGridPoly } from "./getCharacterVisibilityData/makeCamCubes/r
 import { getTriPointsFromGridPolyIds } from "./getCharacterVisibilityData/makeCamCubes/getTriPointsFromGridPolyIds";
 import { createTriMeshFromGridPolyIds } from "./getCharacterVisibilityData/makeCamCubes/createTriMeshFromGridPolyIds";
 import { getDidGridSettingsChange } from "./getCharacterVisibilityData/getDidGridSettingsChange";
+import { getShouldRecalculateCamScores } from "./getCharacterVisibilityData/getShouldRecalculateCamScores";
+import { findOuterEdgesFunctions } from "./getCharacterVisibilityData/makeCamCubes/findOuterEdges";
 
 // Expose everything on window.pageRefs
 
@@ -130,7 +132,9 @@ const pageRefsFunctions = {
   getTriPointsFromGridPolyIds,
   createTriMeshFromGridPolyIds,
   getDidGridSettingsChange,
+  getShouldRecalculateCamScores,
   filterMap,
+  ...findOuterEdgesFunctions,
   delay: async (time: number) => new Promise((resolve) => setTimeout(resolve, time)),
 };
 
@@ -141,8 +145,9 @@ export const initialPageRefs = {
   pointIslandsByCamera: {},
   gridPolyMap: {},
   islandPolyIdsByCamera: {},
-  GRID_SPACE: 1,
+  GRID_SPACE: 4,
   RESOLUTION_LEVEL: 5,
+  CAMCUBE_HEIGHT: 3,
   //
   ...pageRefsFunctions,
 };
@@ -190,6 +195,7 @@ export type PageRefsExtras = {
 
   GRID_SPACE: number; // space between grid points, in meters, more space means less points to check
   RESOLUTION_LEVEL: number; // higher resolution means more pixels to check, so more accurate but slower
+  CAMCUBE_HEIGHT: number;
 
   pointsInfo: PointsInfo;
   gridPointMap: GridPointMap;

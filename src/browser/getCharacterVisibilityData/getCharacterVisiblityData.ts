@@ -2,6 +2,7 @@ import { FreeCamera, Mesh, Scene, Vector3 } from "@babylonjs/core";
 import { Point3D } from "chootils/dist/points3d";
 import { PlaceInfo } from "../..";
 import { GridPolyId } from "./findPointsOnFloors";
+import { findOuterEdgesFunctions } from "./makeCamCubes/findOuterEdges";
 
 export type IdPoint3D = { x: number; y: number; z: number; id: string };
 
@@ -24,57 +25,26 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     applyBlackMaterialToDetails,
     getFovScaleFactor,
     waitForSceneReady,
-    calculateCameraScore,
     createVisualMarker,
     calculateRelativeDistanceScores,
-    findIslandsFromPoints,
-    generateTrianglesFromPoints,
-    createAndExtrudeMesh,
-    getSimplifiedPoint,
     pointsInfo,
     gridPointMap,
-    gridPointsOrganized,
     pointIslandsByCamera,
     islandPolyIdsByCamera,
     findGridPolysForIsland,
-    gridPolyMap,
-    filterMap,
-    debugCamScores,
     getTriPointsFromGridPolyIds,
     createTriMeshFromGridPolyIds,
-    getDidGridSettingsChange,
+    getShouldRecalculateCamScores,
+    reverseWindingOrder,
+    findOuterEdges,
+    convertToVector3,
     GRID_SPACE,
     RESOLUTION_LEVEL,
+    CAMCUBE_HEIGHT,
   } = window.pageRefs;
   if (!scene || !modelFile || !BABYLON || !canvas) return;
 
-  // To clear cached points data
-  // localStorage.clear();
-
-  // pointsInfo, pointIslandsByCamera, gridPointMap, gridPointsOrganized
-
-  // Check if localStorage has pointsInfo stored
-  const pointsInfoFromStorage = localStorage.getItem("pointsInfo");
-  if (pointsInfoFromStorage) {
-    const parsedPointsInfo = JSON.parse(pointsInfoFromStorage);
-    Object.assign(pointsInfo, parsedPointsInfo);
-  }
-  const pointIslandsByCameraFromStorage = localStorage.getItem("pointIslandsByCamera");
-  if (pointIslandsByCameraFromStorage) {
-    const parsedPointIslandsByCamera = JSON.parse(pointIslandsByCameraFromStorage);
-    Object.assign(pointIslandsByCamera, parsedPointIslandsByCamera);
-  }
-
-  const didLoadPointsInfo = Object.keys(pointsInfo).length > 0;
-  const didLoadPointIslandsByCamera = Object.keys(pointIslandsByCamera).length > 0;
-
-  const didLoadData = didLoadPointsInfo && didLoadPointIslandsByCamera;
-
-  const didGridSettingsChange = getDidGridSettingsChange();
-
-  const shouldRecalculateCamScores = !didLoadData || didGridSettingsChange;
-
-  // let alreadyHasPointsInfo
+  const shouldRecalculateCamScores = getShouldRecalculateCamScores();
 
   //   const TEST_POINT_INDEX = 8;
   const TEST_POINT_INDEX = -1; // set this to check what's happening at one of the points
@@ -141,7 +111,6 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
         const characterPosition = fakeCharacter.position;
 
         const initialFov = camera.fov;
-        const initialPosition = camera.position.clone();
 
         function updateCameraZoom(value: number) {
           camera.fov = initialFov / value;
@@ -235,159 +204,11 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
       await delay(CHECK_WAIT_TIME / 7);
     }
 
-    // for (const visualMarker of visualMarkers) visualMarker?.dispose();
+    for (const visualMarker of visualMarkers) visualMarker?.dispose();
   }
 
   // Update to use pointIds?
   // ALSO need to make it so quad polys make two triangles
-
-  /**
-   * Function to identify outer edges from a list of triangles.
-   */
-  function findOuterEdges(indices: number[]): { edge: Edge; triangleIndex: number }[] {
-    const edgeMap: { [key: string]: { count: number; triangleIndices: number[] } } = {};
-    const edges: { edge: Edge; triangleIndex: number }[] = [];
-
-    for (let i = 0; i < indices.length; i += 3) {
-      const triEdges = [
-        { start: indices[i], end: indices[i + 1] },
-        { start: indices[i + 1], end: indices[i + 2] },
-        { start: indices[i + 2], end: indices[i] },
-      ];
-
-      triEdges.forEach((edge) => {
-        const key = edge.start < edge.end ? `${edge.start}_${edge.end}` : `${edge.end}_${edge.start}`;
-        if (!edgeMap[key]) {
-          edgeMap[key] = { count: 0, triangleIndices: [] };
-        }
-        edgeMap[key].count++;
-        edgeMap[key].triangleIndices.push(i / 3); // Store the triangle index
-      });
-    }
-
-    Object.keys(edgeMap).forEach((key) => {
-      if (edgeMap[key].count === 1) {
-        // Only add edges that appear in one triangle
-        const edge = key.split("_").map(Number);
-        edges.push({ edge: { start: edge[0], end: edge[1] }, triangleIndex: edgeMap[key].triangleIndices[0] });
-      }
-    });
-
-    return edges;
-  }
-
-  function calculateNormals(vertices: Point3D[], indices: number[]): Point3D[] {
-    const normals: Point3D[] = [];
-
-    for (let i = 0; i < indices.length; i += 3) {
-      const p1 = vertices[indices[i]];
-      const p2 = vertices[indices[i + 1]];
-      const p3 = vertices[indices[i + 2]];
-      const normal = calculateNormal(p1, p2, p3);
-      normals.push(normal);
-    }
-
-    return normals;
-  }
-
-  function calculateNormal(v1: Point3D, v2: Point3D, v3: Point3D): Point3D {
-    const U = { x: v2.x - v1.x, y: v2.y - v1.y, z: v2.z - v1.z };
-    const V = { x: v3.x - v2.x, y: v3.y - v2.y, z: v3.z - v2.z };
-
-    return {
-      x: U.y * V.z - U.z * V.y,
-      y: U.z * V.x - U.x * V.z,
-      z: U.x * V.y - U.y * V.x,
-    };
-  }
-
-  /**
-   * Main function to create extruded terrain mesh.
-   */
-  const createExtrudedTriMeshFromGridPolyIds = (
-    gridPolyIds: GridPolyId[],
-    scene: Scene,
-    extrusionHeight: number = 1
-  ): Mesh => {
-    const points: Point3D[][] = getTriPointsFromGridPolyIds(gridPolyIds);
-    const { uniqueVertices, indices } = buildUniqueVerticesAndIndices(points);
-
-    // Duplicate vertices upwards
-    const totalVertices = uniqueVertices.length;
-    const upperVertices = uniqueVertices.map((vertex) => ({ x: vertex.x, y: vertex.y + extrusionHeight, z: vertex.z }));
-    const newVertices = uniqueVertices.concat(upperVertices);
-
-    // After computing unique vertices and indices
-    const customNormals = calculateNormals(uniqueVertices, indices);
-
-    // Create side faces for extrusion
-    const outerEdges = findOuterEdges(indices);
-    outerEdges.forEach(({ edge, triangleIndex }) => {
-      const normal = customNormals[triangleIndex];
-      const direction = Math.sign(normal.x + normal.y + normal.z); // Adjust this based on your coordinate system
-
-      const upperStart = edge.start + totalVertices;
-      const upperEnd = edge.end + totalVertices;
-
-      if (direction > 0) {
-        indices.push(edge.start, upperStart, edge.end);
-        indices.push(edge.end, upperStart, upperEnd);
-      } else {
-        indices.push(edge.start, edge.end, upperStart);
-        indices.push(edge.end, upperEnd, upperStart);
-      }
-    });
-
-    // Create and correct the top face
-    const upperIndices = indices.slice(0, indices.length / 2).map((index) => index + totalVertices);
-    for (let i = 0; i < upperIndices.length; i += 3) {
-      // Reverse winding order for each triangle of the top face
-      const temp = upperIndices[i + 1];
-      upperIndices[i + 1] = upperIndices[i + 2];
-      upperIndices[i + 2] = temp;
-    }
-
-    // Concatenate the corrected top face indices
-    indices.push(...upperIndices);
-
-    // Recompute normals with new geometry
-    const positions = newVertices.flatMap((vertex) => [vertex.x, vertex.y, vertex.z]);
-    const normals: number[] = [];
-    BABYLON.VertexData.ComputeNormals(positions, indices, normals);
-
-    // Apply vertex data to the custom mesh
-    const customMesh = new BABYLON.Mesh("customExtruded", scene);
-    const vertexData = new BABYLON.VertexData();
-    vertexData.positions = positions;
-    vertexData.indices = indices;
-    vertexData.normals = normals;
-    vertexData.applyToMesh(customMesh, true);
-
-    return customMesh;
-  };
-
-  /**
-   * Helper function to build unique vertices and their indices.
-   */
-  function buildUniqueVerticesAndIndices(points: Point3D[][]): { uniqueVertices: Point3D[]; indices: number[] } {
-    const uniqueVertices: Point3D[] = [];
-    const indices: number[] = [];
-    const vertexLookup: { [key: string]: number } = {};
-
-    let index = 0;
-    points.forEach((triangle) => {
-      triangle.forEach((vertex) => {
-        const key = `${vertex.x}_${vertex.y}_${vertex.z}`;
-        if (vertexLookup[key] === undefined) {
-          uniqueVertices.push(vertex);
-          vertexLookup[key] = index++;
-        }
-        indices.push(vertexLookup[key]);
-      });
-    });
-
-    return { uniqueVertices, indices };
-  }
 
   //   for each camera, for each isalnd, get the island poly data
   for (const camName of camNames) {
@@ -397,8 +218,6 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     const camera = modelFile.cameras[camName] as FreeCamera;
     if (!camera) return;
     scene.activeCamera = camera;
-    scene.render();
-    await delay(1);
     scene.render();
     await delay(CHECK_WAIT_TIME);
 
@@ -423,9 +242,45 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
 
       // const islandTriMesh = createExtrudedTriMeshFromGridPolyIds(foundIslandPolyIds, scene, 0.2);
       const islandTriMesh = createTriMeshFromGridPolyIds(foundIslandPolyIds, scene);
+      // const flippedNormalsMesh = reverseWindingOrder(islandTriMesh)
+      // reverseWindingOrder(islandTriMesh);
+      const duplicatedMesh = islandTriMesh.clone("duplicatedMesh" + camName);
+      duplicatedMesh.makeGeometryUnique();
+      // move duplicatedMesh up by CAMCUBE_HEIGHT relative to the original mesh
+      duplicatedMesh.position.y += CAMCUBE_HEIGHT * 10;
+      // reverseWindingOrder(islandTriMesh);
+      reverseWindingOrder(islandTriMesh);
+      reverseWindingOrder(duplicatedMesh);
+
+      if (shouldKeepCamera) {
+        const outerEdges = findOuterEdges(islandTriMesh);
+        console.log("camName", camName);
+        console.log("outerEdges");
+        console.log(outerEdges);
+
+        const positions = BABYLON.VertexData.ExtractFromMesh(islandTriMesh).positions as number[];
+        const vector3Vertices = convertToVector3(outerEdges, positions);
+
+        // show a sphere at each point
+        for (const v of vector3Vertices) {
+          // const sphere = BABYLON.MeshBuilder.CreateSphere("sphere", { diameter: 0.1 }, scene);
+          createVisualMarker(v, new BABYLON.Color3(1, 0, 0));
+
+          scene.render();
+          // sphere.position = v;
+          await delay(1);
+          // sphere.position = v;
+        }
+        await delay(5000);
+      }
+
+      // Give a green color to duplicatedMesh
+      const topMaterial = new BABYLON.StandardMaterial("greenMat", scene);
+      topMaterial.diffuseColor = new BABYLON.Color3(0, 1, 0);
+      duplicatedMesh.material = topMaterial;
+
       madeMeshes.push(islandTriMesh);
-      scene.render();
-      await delay(1);
+      madeMeshes.push(duplicatedMesh);
       scene.render();
       await delay(CHECK_WAIT_TIME);
       if (!shouldKeepCamera) {
@@ -449,31 +304,40 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     }
   }
 
-  console.log("set free camera");
-
-  if (freeCamera) {
-    scene.activeCamera = freeCamera;
-  }
+  // console.log("set free camera");
+  // if (freeCamera) {
+  //   scene.activeCamera = freeCamera;
+  // }
 
   // hide the scene meshes
   modelFile.transformNodes.details.setEnabled(false);
 
+  console.log("camNames", camNames);
+
+  // Focus on the 3rd camera
+  const roomCamera = modelFile.cameras[camNames[1]] as FreeCamera;
+  const topCamera = modelFile.cameras[camNames[3]] as FreeCamera;
+  scene.activeCamera = roomCamera;
+  scene.render();
+  await delay(2000);
+  scene.activeCamera = topCamera;
+  scene.render();
+  await delay(2000);
+  scene.activeCamera = roomCamera;
+  scene.render();
+  await delay(2000);
+  scene.activeCamera = topCamera;
+  scene.render();
+  await delay(2000);
+
   // loop 3 times
-  for (let i = 0; i < 3; i++) {
-    for (const camName of camNames) {
-      const pointsByIsland = pointIslandsByCamera[camName];
-      if (!pointsByIsland) continue;
-
-      const camera = modelFile.cameras[camName] as FreeCamera;
-      if (!camera) return;
-      scene.activeCamera = camera;
-      scene.render();
-      await delay(1);
-      scene.render();
-      await delay(CHECK_WAIT_TIME * 2);
-    }
-  }
-
-  // createAndExtrudeMesh
-  // await delay(2000);
+  // for (let i = 0; i < 3; i++) {
+  //   for (const camName of camNames) {
+  //     const camera = modelFile.cameras[camName] as FreeCamera;
+  //     if (!camera) return;
+  //     scene.activeCamera = camera;
+  //     scene.render();
+  //     await delay(CHECK_WAIT_TIME * 2);
+  //   }
+  // }
 }

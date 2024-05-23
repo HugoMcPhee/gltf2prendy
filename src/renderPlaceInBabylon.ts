@@ -45,7 +45,7 @@ export async function renderPlaceInBabylon({
   await page.goto("http://127.0.0.1", { timeout: 0 });
 
   await page.addStyleTag({
-    content: `body{ margin: 0 !important; width: 1920px; height: 1080px}`,
+    content: `body{ margin: 0 !important; width: 1920px; height: 1080px; background-color: black}`,
   });
 
   // await page.addScriptTag({ url: "https://cdn.babylonjs.com/babylon.js" });
