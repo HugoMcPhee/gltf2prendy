@@ -45,7 +45,6 @@ import {
   PointIslandsByCamera,
   createVisualMarker,
   generateFloorPoints,
-  getSimplifiedPoint,
 } from "./getCharacterVisibilityData/findPointsOnFloors";
 import { createAndExtrudeMesh } from "./getCharacterVisibilityData/makeCamCubes/createAndExtrudeMesh";
 import {
@@ -70,6 +69,7 @@ import { createTriMeshFromGridPolyIds } from "./getCharacterVisibilityData/makeC
 import { getDidGridSettingsChange } from "./getCharacterVisibilityData/getDidGridSettingsChange";
 import { getShouldRecalculateCamScores } from "./getCharacterVisibilityData/getShouldRecalculateCamScores";
 import { findOuterEdgesFunctions } from "./getCharacterVisibilityData/makeCamCubes/findOuterEdges";
+import { pointsFunctions } from "./utils/points";
 
 // Expose everything on window.pageRefs
 
@@ -123,7 +123,6 @@ const pageRefsFunctions = {
   findIslandsFromPoints,
   generateTrianglesFromPoints,
   createAndExtrudeMesh,
-  getSimplifiedPoint,
   findGridPolyForGridPoint,
   findGridPolysForIsland,
   findPolyTypeFromPoints,
@@ -135,6 +134,7 @@ const pageRefsFunctions = {
   getShouldRecalculateCamScores,
   filterMap,
   ...findOuterEdgesFunctions,
+  ...pointsFunctions,
   delay: async (time: number) => new Promise((resolve) => setTimeout(resolve, time)),
 };
 
@@ -150,6 +150,7 @@ export const initialPageRefs = {
   CAMCUBE_HEIGHT: 3,
   //
   ...pageRefsFunctions,
+  ...pointsFunctions,
 };
 
 export type PageRefsFunctions = typeof pageRefsFunctions;

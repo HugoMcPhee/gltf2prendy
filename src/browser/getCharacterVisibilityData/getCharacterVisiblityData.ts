@@ -37,7 +37,9 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     getShouldRecalculateCamScores,
     reverseWindingOrder,
     findOuterEdges,
+    findOuterEdgesAndPoints,
     convertToVector3,
+    getEasyVertexData,
     GRID_SPACE,
     RESOLUTION_LEVEL,
     CAMCUBE_HEIGHT,
@@ -253,18 +255,26 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
       reverseWindingOrder(duplicatedMesh);
 
       if (shouldKeepCamera) {
+        const easyVertexData = getEasyVertexData(islandTriMesh);
+
+        console.log("- - - - - - - - - - - - - - - - - - - - - - - - - ");
+        console.log("easyVertexData");
+        console.log(easyVertexData);
+
         const outerEdges = findOuterEdges(islandTriMesh);
+        const { outerPoints } = findOuterEdgesAndPoints(islandTriMesh);
         console.log("camName", camName);
         console.log("outerEdges");
         console.log(outerEdges);
 
         const positions = BABYLON.VertexData.ExtractFromMesh(islandTriMesh).positions as number[];
-        const vector3Vertices = convertToVector3(outerEdges, positions);
+        // const vector3Vertices = convertToVector3(outerEdges, positions);
+        const vector3Vertices = outerEdges;
 
         // show a sphere at each point
-        for (const v of vector3Vertices) {
+        for (const point of outerPoints) {
           // const sphere = BABYLON.MeshBuilder.CreateSphere("sphere", { diameter: 0.1 }, scene);
-          createVisualMarker(v, new BABYLON.Color3(1, 0, 0));
+          createVisualMarker(new BABYLON.Vector3(point.x, point.y, point.z), new BABYLON.Color3(1, 0, 0));
 
           scene.render();
           // sphere.position = v;

@@ -47,17 +47,10 @@ export type GridTri = {
 export type GridPolyMap = Record<string, GridPoly>;
 export type GridPolyIdsByCamIslands = Record<CamName, Record<IslandIndex, GridPolyId[]>>;
 
-export function getSimplifiedPoint(vectorPoint: Vector3) {
-  const { x: realX, y: realY, z: realZ } = vectorPoint;
-  const x = Math.round(realX * 1000) / 1000;
-  const y = Math.round(realY * 1000) / 1000;
-  const z = Math.round(realZ * 1000) / 1000;
-  return { x, y, z };
-}
-
 // Function to create the grid of points and cast rays
 export async function generateFloorPoints(gridDistance: number = 1) {
-  const { BABYLON, scene, modelFile, gridPointMap, gridPointsOrganized, getDidGridSettingsChange } = window.pageRefs;
+  const { BABYLON, scene, modelFile, gridPointMap, gridPointsOrganized, getDidGridSettingsChange, getSimplifiedPoint } =
+    window.pageRefs;
 
   // Check if gridPointMap and gridPointsOrganized already exist in localStorage, and load those instead
   const gridPointMapFromStorage = localStorage.getItem("gridPointMap");

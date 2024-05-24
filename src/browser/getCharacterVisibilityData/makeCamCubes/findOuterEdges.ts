@@ -1,51 +1,151 @@
 import { Mesh, Vector3 } from "@babylonjs/core";
+import { EasyVertexData, Edge, EdgeId, PointId, TriId } from "../../utils/points";
+import { Point3D } from "chootils/dist/points3d";
 
-interface Edge {
+interface EdgePrev {
   start: number;
   end: number;
 }
 
-function findOuterEdges(mesh: Mesh): number[][] {
-  const { BABYLON } = window.pageRefs;
+// Helper to retrieve edges from a triangle using the vertex data
+function getEdgesFromTri(vertexData: EasyVertexData, triId: TriId): EdgeId[] {
+  const { triIdToEdgeTriIdMap, edgeTriMap } = vertexData;
+  return edgeTriMap[triIdToEdgeTriIdMap[triId]];
+}
+
+function findOuterEdgesAndPoints(mesh: Mesh): { outerEdges: Edge[]; outerPoints: Point3D[] } {
+  const { getEasyVertexData, getEdgesFromTri } = window.pageRefs;
+
+  const vertexData = getEasyVertexData(mesh);
+  const { edgeMap, pointMap } = vertexData;
+
+  const edgeCountMap: Record<EdgeId, number> = {};
+  const triIds = Object.keys(vertexData.triMap);
+
+  // Use helper to count edge occurrences
+  for (const triId of triIds) {
+    const edges = getEdgesFromTri(vertexData, triId);
+    for (const edgeId of edges) {
+      edgeCountMap[edgeId] = (edgeCountMap[edgeId] || 0) + 1;
+    }
+  }
+
+  // Collect edges that occur only once and their points
+  const outerEdges: Edge[] = [];
+  const pointIds = new Set<PointId>();
+
+  for (const [edgeId, count] of Object.entries(edgeCountMap)) {
+    if (count === 1) {
+      const edge = edgeMap[edgeId];
+      outerEdges.push(edge);
+      pointIds.add(edge[0]);
+      pointIds.add(edge[1]);
+    }
+  }
+
+  // Collect points from pointIds
+  const outerPoints: Point3D[] = Array.from(pointIds).map((id) => pointMap[id]);
+
+  return { outerEdges, outerPoints };
+}
+
+function findOuterEdges(mesh: Mesh): Vector3[] {
+  const { BABYLON, getEasyVertexData } = window.pageRefs;
 
   const vertexData = BABYLON.VertexData.ExtractFromMesh(mesh);
-  const positions = vertexData.positions as number[];
-  const indices = vertexData.indices;
+  const positions = vertexData.positions!;
+  const indices = vertexData.indices!;
+
+  const easyVertexData = getEasyVertexData(mesh);
 
   if (!positions || !indices) {
     console.error("Mesh data is missing positions or indices.");
     return [];
   }
 
-  let edgeMap = new Map<string, Edge>();
+  // Object to count edge occurrences
+  const edgeDict: { [key: string]: number } = {};
 
-  // Store and count edges
+  // Collect all edges and count their occurrences
   for (let i = 0; i < indices.length; i += 3) {
-    const triangle = [indices[i], indices[i + 1], indices[i + 2]];
-    const edges: Edge[] = [
-      { start: Math.min(triangle[0], triangle[1]), end: Math.max(triangle[0], triangle[1]) },
-      { start: Math.min(triangle[1], triangle[2]), end: Math.max(triangle[1], triangle[2]) },
-      { start: Math.min(triangle[2], triangle[0]), end: Math.max(triangle[2], triangle[0]) },
+    let edgeKeys = [
+      `${Math.min(indices[i], indices[i + 1])}-${Math.max(indices[i], indices[i + 1])}`,
+      `${Math.min(indices[i + 1], indices[i + 2])}-${Math.max(indices[i + 1], indices[i + 2])}`,
+      `${Math.min(indices[i + 2], indices[i])}-${Math.max(indices[i + 2], indices[i])}`,
     ];
 
-    edges.forEach((edge) => {
-      const key = `${edge.start}-${edge.end}`;
-      if (edgeMap.has(key)) {
-        console.log(`Removing internal edge: ${key}`);
-        edgeMap.delete(key); // Remove internal edge
-      } else {
-        console.log(`Adding outer edge: ${key}`);
-        edgeMap.set(key, edge); // Store outer edge
-      }
+    edgeKeys.forEach((key) => {
+      edgeDict[key] = (edgeDict[key] || 0) + 1;
     });
   }
 
-  console.log(`Outer edges found: ${Array.from(edgeMap.values()).length}`);
-  const outerEdges = Array.from(edgeMap.values());
-  const orderedVertices = orderOuterEdges(outerEdges, positions);
+  // Find outer edges (those that occur only once)
+  const outerEdges = Object.keys(edgeDict)
+    .filter((key) => edgeDict[key] === 1)
+    .map((key) => {
+      const [start, end] = key.split("-").map(Number);
+      return { start, end };
+    });
 
-  // Ensure the vertices are ordered counterclockwise
-  return ensureCounterclockwise(orderedVertices);
+  // Assuming we're just tracing the boundary, let's create an array of Vector3 for outer vertices
+  let vertices: Vector3[] = [];
+  if (outerEdges.length > 0) {
+    let currentEdge = outerEdges[0];
+    let usedEdges = new Set<string>();
+
+    do {
+      vertices.push(
+        new Vector3(
+          positions[currentEdge.start * 3],
+          positions[currentEdge.start * 3 + 1],
+          positions[currentEdge.start * 3 + 2]
+        )
+      );
+      usedEdges.add(`${currentEdge.start}-${currentEdge.end}`);
+      // Find the next edge that connects to the current one
+      currentEdge =
+        outerEdges.find((edge) => edge.start === currentEdge.end && !usedEdges.has(`${edge.start}-${edge.end}`)) ||
+        currentEdge;
+    } while (!usedEdges.has(`${currentEdge.start}-${currentEdge.end}`) && currentEdge !== outerEdges[0]);
+  }
+
+  return vertices;
+}
+
+function orderOuterEdges(edges: EdgePrev[]): EdgePrev[] {
+  if (edges.length === 0) return [];
+
+  let result: EdgePrev[] = [];
+  let visited = new Set<string>();
+  let currentEdge = edges[0];
+  visited.add(`${currentEdge.start}-${currentEdge.end}`);
+
+  while (true) {
+    result.push(currentEdge);
+    let nextEdge = edges.find((edge) => {
+      const edgeKey = `${edge.start}-${edge.end}`;
+      return (edge.start === currentEdge.end || edge.end === currentEdge.end) && !visited.has(edgeKey);
+    });
+
+    if (!nextEdge) break;
+    visited.add(`${nextEdge.start}-${nextEdge.end}`);
+    currentEdge = nextEdge;
+  }
+
+  return result;
+}
+
+function ensureCounterclockwise(vertices: number[][]): number[][] {
+  let area = calculateSignedArea(vertices);
+  return area < 0 ? vertices.reverse() : vertices;
+}
+
+function calculateSignedArea(vertices: number[][]): number {
+  let area = 0;
+  for (let i = 0; i < vertices.length - 1; i++) {
+    area += vertices[i][0] * vertices[i + 1][1] - vertices[i + 1][0] * vertices[i][1];
+  }
+  return area / 2;
 }
 
 function convertToVector3(vertices: number[][], positions: number[]): Vector3[] {
@@ -57,70 +157,6 @@ function convertToVector3(vertices: number[][], positions: number[]): Vector3[] 
     const z = positions[index * 3 + 2]; // Get z from the positions array
     return new BABYLON.Vector3(vertex[0], vertex[1], z);
   });
-}
-
-function orderOuterEdges(edges: Edge[], positions: number[]): number[][] {
-  if (edges.length === 0) return [];
-
-  let result: number[][] = [];
-  let edgeMap = new Map<string, Edge>(edges.map((edge) => [`${edge.start}-${edge.end}`, edge]));
-  let usedEdges = new Set<string>();
-
-  let currentEdge = edges[0];
-  let startVertex = currentEdge.start;
-  let currentVertex = currentEdge.end;
-
-  // Add the first vertex position
-  result.push([positions[startVertex * 3], positions[startVertex * 3 + 1]]);
-  result.push([positions[currentVertex * 3], positions[currentVertex * 3 + 1]]);
-  usedEdges.add(`${startVertex}-${currentVertex}`);
-
-  while (true) {
-    let foundNext = false;
-    for (let edge of edgeMap.values()) {
-      let edgeKey = `${edge.start}-${edge.end}`;
-      if (usedEdges.has(edgeKey)) continue; // Skip used edges
-
-      // Check if this edge is a connecting edge
-      if (edge.start === currentVertex && !usedEdges.has(`${edge.start}-${edge.end}`)) {
-        currentVertex = edge.end;
-        result.push([positions[currentVertex * 3], positions[currentVertex * 3 + 1]]);
-        usedEdges.add(edgeKey);
-        foundNext = true;
-        break;
-      } else if (edge.end === currentVertex && !usedEdges.has(`${edge.end}-${edge.start}`)) {
-        currentVertex = edge.start;
-        result.push([positions[currentVertex * 3], positions[currentVertex * 3 + 1]]);
-        usedEdges.add(edgeKey);
-        foundNext = true;
-        break;
-      }
-    }
-
-    // Break the loop if no connecting edge is found
-    if (!foundNext) break;
-  }
-
-  return result;
-}
-
-function calculateSignedArea(vertices: number[][]): number {
-  let area = 0;
-  for (let i = 0; i < vertices.length; i++) {
-    let [x1, y1] = vertices[i];
-    let [x2, y2] = vertices[(i + 1) % vertices.length];
-    area += x1 * y2 - y1 * x2;
-  }
-  console.log(`Signed area: ${area}`);
-  return area / 2;
-}
-
-function ensureCounterclockwise(vertices: number[][]): number[][] {
-  if (calculateSignedArea(vertices) < 0) {
-    console.log("Reversing vertices for counterclockwise order");
-    return vertices.reverse();
-  }
-  return vertices;
 }
 
 /**
@@ -174,4 +210,6 @@ export const findOuterEdgesFunctions = {
   calculateSignedArea,
   ensureCounterclockwise,
   reverseWindingOrder,
+  getEdgesFromTri,
+  findOuterEdgesAndPoints,
 };
