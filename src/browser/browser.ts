@@ -13,8 +13,11 @@ import {
   HemisphericLight,
   Mesh,
   MeshBuilder,
+  MeshDebugMode,
+  MeshDebugPluginMaterial,
   PBRMaterial,
   PostProcess,
+  QuadraticErrorSimplification,
   Quaternion,
   Ray,
   Scene,
@@ -102,6 +105,9 @@ export const BABYLON = {
   Mesh,
   VertexData,
   VertexBuffer,
+  QuadraticErrorSimplification,
+  MeshDebugPluginMaterial,
+  MeshDebugMode,
 };
 const pageRefsFunctions = {
   handleGltfModel,
@@ -147,7 +153,7 @@ export const initialPageRefs = {
   pointIslandsByCamera: {},
   gridPolyMap: {},
   islandPolyIdsByCamera: {},
-  GRID_SPACE: 4,
+  GRID_SPACE: 2,
   RESOLUTION_LEVEL: 5,
   CAMCUBE_HEIGHT: 3,
   //
