@@ -2,7 +2,7 @@ import { Mesh, Vector3 } from "@babylonjs/core";
 import { Point3D } from "chootils/dist/points3d";
 
 export type PointId = string;
-export type Point = Point3D;
+export type Point = { x: number; y: number; z: number };
 export type PointMap = Record<PointId, Point>;
 
 export type TriId = string;
@@ -21,7 +21,17 @@ export type TriIdToEdgeTriIdMap = Record<TriId, EdgeTriId>;
 export type EdgeTriIdToTriIdMap = Record<EdgeTriId, TriId>;
 export type PointIdToTriIdsMap = Record<PointId, TriId[]>;
 
-export type EasyVertexData = ReturnType<typeof getEasyVertexData>;
+export type BasicEasyVertexData = {
+  pointMap: PointMap;
+  triMap: TriMap;
+};
+export type EasyVertexData = BasicEasyVertexData & {
+  edgeMap: EdgeMap;
+  edgeTriMap: EdgeTriMap;
+  triIdToEdgeTriIdMap: TriIdToEdgeTriIdMap;
+  edgeTriIdToTriIdMap: EdgeTriIdToTriIdMap;
+  pointIdToTriIdsMap: PointIdToTriIdsMap;
+};
 
 export function getSimplifiedNumber(num: number) {
   return Math.round(num * 1000) / 1000;
@@ -33,15 +43,11 @@ export function getSimplifiedPoint(vectorPoint: Point3D | Vector3) {
   return { x: getSimplifiedNumber(realX), y: getSimplifiedNumber(realY), z: getSimplifiedNumber(realZ) };
 }
 
-function getEasyVertexData(mesh: Mesh): {
-  pointMap: PointMap;
-  triMap: TriMap;
-  edgeMap: EdgeMap;
-  edgeTriMap: EdgeTriMap;
-  triIdToEdgeTriIdMap: TriIdToEdgeTriIdMap;
-  edgeTriIdToTriIdMap: EdgeTriIdToTriIdMap;
-  pointIdToTriIdsMap: PointIdToTriIdsMap;
-} {
+function getPointId(point: Point): PointId {
+  return `${point.x}_${point.y}_${point.z}`;
+}
+
+function getEasyVertexData(mesh: Mesh): EasyVertexData {
   const { BABYLON } = window.pageRefs;
 
   const vertexData = BABYLON.VertexData.ExtractFromMesh(mesh);
@@ -123,7 +129,29 @@ function getEasyVertexData(mesh: Mesh): {
   };
 }
 
-function convertMapsToVertexData(pointMap: PointMap, triMap: TriMap): { positions: number[]; indices: number[] } {
+function getBasicEasyVertexDataFromTris(tris: Tri[]): BasicEasyVertexData {
+  const pointMap: PointMap = {};
+  const newTriMap: TriMap = {};
+
+  for (const tri of tris) {
+    const triId = tri.join("_");
+    tri.forEach((pointId) => {
+      if (!pointMap[pointId]) {
+        const [x, y, z] = pointId.split("_").map((num) => parseFloat(num));
+        pointMap[pointId] = { x, y, z };
+      }
+    });
+    newTriMap[triId] = tri;
+  }
+
+  return { pointMap, triMap: newTriMap };
+}
+
+function convertBasicEasyVertexDataToVertexData(basicEasyVertexData: BasicEasyVertexData): {
+  positions: number[];
+  indices: number[];
+} {
+  const { pointMap, triMap } = basicEasyVertexData;
   let positions: number[] = [];
   let indices: number[] = [];
 
@@ -148,9 +176,122 @@ function convertMapsToVertexData(pointMap: PointMap, triMap: TriMap): { position
   return { positions, indices };
 }
 
+function getBasicEasyVertexDataFromQuad({
+  bottomLeftPoint,
+  bottomRightPoint,
+  topLeftPoint,
+  topRightPoint,
+}: {
+  bottomLeftPoint: Point;
+  bottomRightPoint: Point;
+  topLeftPoint: Point;
+  topRightPoint: Point;
+}): BasicEasyVertexData {
+  const pointMap: PointMap = {
+    [getPointId(bottomLeftPoint)]: bottomLeftPoint,
+    [getPointId(bottomRightPoint)]: bottomRightPoint,
+    [getPointId(topLeftPoint)]: topLeftPoint,
+    [getPointId(topRightPoint)]: topRightPoint,
+  };
+
+  const tri1: Tri = [getPointId(bottomLeftPoint), getPointId(bottomRightPoint), getPointId(topLeftPoint)];
+  const tri2: Tri = [getPointId(bottomRightPoint), getPointId(topRightPoint), getPointId(topLeftPoint)];
+
+  const triMap: TriMap = {
+    [tri1.join("_")]: tri1,
+    [tri2.join("_")]: tri2,
+  };
+
+  return { pointMap, triMap };
+}
+
+function mergeBasicEasyVertexData(...basicEasyVertexDataList: BasicEasyVertexData[]): BasicEasyVertexData {
+  const pointMap: PointMap = {};
+  const triMap: TriMap = {};
+
+  for (const basicEasyVertexData of basicEasyVertexDataList) {
+    for (const pointId in basicEasyVertexData.pointMap) {
+      pointMap[pointId] = basicEasyVertexData.pointMap[pointId];
+    }
+
+    for (const triId in basicEasyVertexData.triMap) {
+      triMap[triId] = basicEasyVertexData.triMap[triId];
+    }
+  }
+
+  return { pointMap, triMap };
+}
+
+function shiftBasicEasyVertexData(basicEasyVertexData: BasicEasyVertexData, shift: Point): BasicEasyVertexData {
+  const { getPointId } = window.pageRefs;
+  const { pointMap, triMap } = basicEasyVertexData;
+
+  const newPointMap: PointMap = {};
+  const newTriMap: TriMap = {};
+
+  const oldPoindIdToNewPointIdMap: Record<PointId, PointId> = {};
+
+  for (const pointId in pointMap) {
+    const point = pointMap[pointId];
+    const newPoint = { x: point.x + shift.x, y: point.y + shift.y, z: point.z + shift.z };
+    const newPointId = getPointId(newPoint);
+    newPointMap[newPointId] = newPoint;
+    oldPoindIdToNewPointIdMap[pointId] = newPointId;
+  }
+
+  for (const triId in triMap) {
+    function findOuterEdgeAndPointIds(mesh: Mesh): { outerEdgeIds: EdgeId[]; outerPointIds: PointId[] } {
+      const { getEasyVertexData, getEdgesFromTri } = window.pageRefs;
+      const vertexData = getEasyVertexData(mesh);
+      const edgeCountMap: Record<EdgeId, number> = {};
+      const vertexDegreeMap: Record<PointId, number> = {};
+      const triIds = Object.keys(vertexData.triMap);
+
+      // Use helper to count edge occurrences and vertex degrees
+      for (const triId of triIds) {
+        const edges = getEdgesFromTri(vertexData, triId);
+        for (const edgeId of edges) {
+          edgeCountMap[edgeId] = (edgeCountMap[edgeId] || 0) + 1;
+          const [pointId1, pointId2] = vertexData.edgeMap[edgeId];
+          vertexDegreeMap[pointId1] = (vertexDegreeMap[pointId1] || 0) + 1;
+          vertexDegreeMap[pointId2] = (vertexDegreeMap[pointId2] || 0) + 1;
+        }
+      }
+
+      // Collect edges that occur only once and their point IDs, with vertex degree considerations
+      const outerEdgeIds: EdgeId[] = [];
+      const pointIds = new Set<PointId>();
+
+      for (const [edgeId, count] of Object.entries(edgeCountMap)) {
+        if (count === 1) {
+          const [pointId1, pointId2] = vertexData.edgeMap[edgeId];
+          if (vertexDegreeMap[pointId1] < 3 && vertexDegreeMap[pointId2] < 3) {
+            outerEdgeIds.push(edgeId);
+            pointIds.add(pointId1);
+            pointIds.add(pointId2);
+          }
+        }
+      }
+
+      const outerPointIds: PointId[] = Array.from(pointIds);
+      return { outerEdgeIds, outerPointIds };
+    }
+    const tri = triMap[triId];
+    const newTri: Tri = tri.map((pointId) => oldPoindIdToNewPointIdMap[pointId]) as Tri;
+    newTriMap[newTri.join("_")] = newTri;
+  }
+
+  return { pointMap: newPointMap, triMap: newTriMap };
+}
+
 export const pointsFunctions = {
   getSimplifiedNumber,
   getSimplifiedPoint,
   getEasyVertexData,
-  convertMapsToVertexData,
+  convertBasicEasyVertexDataToVertexData,
+  getBasicEasyVertexDataFromQuad,
+  getPointId,
+  getBasicEasyVertexDataFromTris,
+  mergeBasicEasyVertexData,
+  shiftBasicEasyVertexData,
 };

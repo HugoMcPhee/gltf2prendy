@@ -37,6 +37,7 @@ import {
   calculateRelativeDistanceScores,
 } from "./getCharacterVisibilityData/calculateCameraScore";
 import { countWhitePixels } from "./getCharacterVisibilityData/countWhitePixels";
+import { debugCamScores } from "./getCharacterVisibilityData/debugCamScores";
 import {
   GridPointMap,
   GridPointsOrganized,
@@ -46,30 +47,30 @@ import {
   createVisualMarker,
   generateFloorPoints,
 } from "./getCharacterVisibilityData/findPointsOnFloors";
+import { getDidGridSettingsChange } from "./getCharacterVisibilityData/getDidGridSettingsChange";
+import { getFovScaleFactor } from "./getCharacterVisibilityData/getFovScaleFactor";
+import { getShouldRecalculateCamScores } from "./getCharacterVisibilityData/getShouldRecalculateCamScores";
+import { camCubeFunctions } from "./getCharacterVisibilityData/makeCamCubes/camCube";
 import { createAndExtrudeMesh } from "./getCharacterVisibilityData/makeCamCubes/createAndExtrudeMesh";
+import { createTriMeshFromGridPolyIds } from "./getCharacterVisibilityData/makeCamCubes/createTriMeshFromGridPolyIds";
 import {
   findGridPolyForGridPoint,
   findGridPolysForIsland,
   findPolyTypeFromPoints,
 } from "./getCharacterVisibilityData/makeCamCubes/findGridPolysForIsland";
 import { findIslandsFromPoints } from "./getCharacterVisibilityData/makeCamCubes/findIslandsFromPoints";
+import { findOuterEdgesFunctions } from "./getCharacterVisibilityData/makeCamCubes/findOuterEdges";
 import { generateTrianglesFromPoints } from "./getCharacterVisibilityData/makeCamCubes/generateTrianglesFromPoints";
+import { getTriPointsFromGridPolyIds } from "./getCharacterVisibilityData/makeCamCubes/getTriPointsFromGridPolyIds";
+import { renderDebugGridPoly } from "./getCharacterVisibilityData/makeCamCubes/renderDebugGridPoly";
 import { setupFakeCharacter } from "./getCharacterVisibilityData/setupFakeCharacter";
-import { getFovScaleFactor } from "./getCharacterVisibilityData/getFovScaleFactor";
 import { handleGltfModel } from "./handleGltfModel";
+import { getFileFromBase64 } from "./loadModelFile/getFileFromBase64";
 import { loadModelFile } from "./loadModelFile/loadModelFile";
 import { setUpBabylonScene } from "./setUpBabylonScene";
 import { shaders } from "./shaders";
-import { waitForSceneReady } from "./waitForSceneReady";
-import { getFileFromBase64 } from "./loadModelFile/getFileFromBase64";
-import { debugCamScores } from "./getCharacterVisibilityData/debugCamScores";
-import { renderDebugGridPoly } from "./getCharacterVisibilityData/makeCamCubes/renderDebugGridPoly";
-import { getTriPointsFromGridPolyIds } from "./getCharacterVisibilityData/makeCamCubes/getTriPointsFromGridPolyIds";
-import { createTriMeshFromGridPolyIds } from "./getCharacterVisibilityData/makeCamCubes/createTriMeshFromGridPolyIds";
-import { getDidGridSettingsChange } from "./getCharacterVisibilityData/getDidGridSettingsChange";
-import { getShouldRecalculateCamScores } from "./getCharacterVisibilityData/getShouldRecalculateCamScores";
-import { findOuterEdgesFunctions } from "./getCharacterVisibilityData/makeCamCubes/findOuterEdges";
 import { pointsFunctions } from "./utils/points";
+import { waitForSceneReady } from "./waitForSceneReady";
 
 // Expose everything on window.pageRefs
 
@@ -135,6 +136,7 @@ const pageRefsFunctions = {
   filterMap,
   ...findOuterEdgesFunctions,
   ...pointsFunctions,
+  ...camCubeFunctions,
   delay: async (time: number) => new Promise((resolve) => setTimeout(resolve, time)),
 };
 

@@ -3,6 +3,8 @@ import { Point3D } from "chootils/dist/points3d";
 import { PlaceInfo } from "../..";
 import { GridPolyId } from "./findPointsOnFloors";
 import { findOuterEdgesFunctions } from "./makeCamCubes/findOuterEdges";
+import { VertexData } from "babylonjs";
+import { BasicEasyVertexData, Tri } from "../utils/points";
 
 export type IdPoint3D = { x: number; y: number; z: number; id: string };
 
@@ -36,10 +38,17 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     createTriMeshFromGridPolyIds,
     getShouldRecalculateCamScores,
     reverseWindingOrder,
-    findOuterEdges,
-    findOuterEdgesAndPoints,
+    findOuterEdgeAndPointIds,
     convertToVector3,
     getEasyVertexData,
+    getOrderedOuterEdges,
+    getBasicEasyVertexDataFromQuad,
+    getPointId: getPointIdFromPoint,
+    getBasicEasyVertexDataFromTris,
+    convertBasicEasyVertexDataToVertexData,
+    mergeBasicEasyVertexData,
+    shiftBasicEasyVertexData,
+    makeCamCubeMesh,
     GRID_SPACE,
     RESOLUTION_LEVEL,
     CAMCUBE_HEIGHT,
@@ -221,96 +230,24 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     if (!camera) return;
     scene.activeCamera = camera;
     scene.render();
-    await delay(CHECK_WAIT_TIME);
+    // await delay(CHECK_WAIT_TIME);
 
     let madeMeshes: Mesh[] = [];
     const islandIds = Object.keys(pointsByIsland);
-    console.log("--------------------");
-    console.log("camName", camName);
-    console.log("pointsByIsland", pointsByIsland);
-    console.log("islandIds", islandIds);
 
     for (const islandId of islandIds) {
-      const islandPointIds = pointsByIsland[islandId];
-      console.log("islandPointIds", islandPointIds);
-
-      const foundIslandPolyIds = await findGridPolysForIsland(islandPointIds);
-      console.log("foundIslandPolyIds", foundIslandPolyIds);
-
-      if (!islandPolyIdsByCamera[camName]) islandPolyIdsByCamera[camName] = {};
-      islandPolyIdsByCamera[camName][islandId] = foundIslandPolyIds;
-
-      const shouldKeepCamera = camNames.indexOf(camName) === camNames.length - 3;
-
-      // const islandTriMesh = createExtrudedTriMeshFromGridPolyIds(foundIslandPolyIds, scene, 0.2);
-      const islandTriMesh = createTriMeshFromGridPolyIds(foundIslandPolyIds, scene);
-      // const flippedNormalsMesh = reverseWindingOrder(islandTriMesh)
-      // reverseWindingOrder(islandTriMesh);
-      const duplicatedMesh = islandTriMesh.clone("duplicatedMesh" + camName);
-      duplicatedMesh.makeGeometryUnique();
-      // move duplicatedMesh up by CAMCUBE_HEIGHT relative to the original mesh
-      duplicatedMesh.position.y += CAMCUBE_HEIGHT * 10;
-      // reverseWindingOrder(islandTriMesh);
-      reverseWindingOrder(islandTriMesh);
-      reverseWindingOrder(duplicatedMesh);
-
-      if (shouldKeepCamera) {
-        const easyVertexData = getEasyVertexData(islandTriMesh);
-
-        console.log("- - - - - - - - - - - - - - - - - - - - - - - - - ");
-        console.log("easyVertexData");
-        console.log(easyVertexData);
-
-        const outerEdges = findOuterEdges(islandTriMesh);
-        const { outerPoints } = findOuterEdgesAndPoints(islandTriMesh);
-        console.log("camName", camName);
-        console.log("outerEdges");
-        console.log(outerEdges);
-
-        const positions = BABYLON.VertexData.ExtractFromMesh(islandTriMesh).positions as number[];
-        // const vector3Vertices = convertToVector3(outerEdges, positions);
-        const vector3Vertices = outerEdges;
-
-        // show a sphere at each point
-        for (const point of outerPoints) {
-          // const sphere = BABYLON.MeshBuilder.CreateSphere("sphere", { diameter: 0.1 }, scene);
-          createVisualMarker(new BABYLON.Vector3(point.x, point.y, point.z), new BABYLON.Color3(1, 0, 0));
-
-          scene.render();
-          // sphere.position = v;
-          await delay(1);
-          // sphere.position = v;
-        }
-        await delay(5000);
+      try {
+        const camCubeMesh = await makeCamCubeMesh(camName, islandId);
+        if (camCubeMesh) madeMeshes.push(camCubeMesh);
+      } catch (e) {
+        console.error(e);
       }
 
-      // Give a green color to duplicatedMesh
-      const topMaterial = new BABYLON.StandardMaterial("greenMat", scene);
-      topMaterial.diffuseColor = new BABYLON.Color3(0, 1, 0);
-      duplicatedMesh.material = topMaterial;
-
-      madeMeshes.push(islandTriMesh);
-      madeMeshes.push(duplicatedMesh);
       scene.render();
-      await delay(CHECK_WAIT_TIME);
-      if (!shouldKeepCamera) {
-        madeMeshes.forEach((m) => m.dispose());
-      }
+      await delay(1);
       scene.render();
-      // for (const polyId of foundIslandPolyIds) {
-      //   // make a random color
-      //   const color = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
-      //   madeMeshes = madeMeshes.concat(await renderDebugGridPoly(polyId, color));
 
-      //   if (madeMeshes.length) {
-      //     scene.render();
-      //     await delay(1);
-      //     scene.render();
-      //     await delay(100);
-      //     madeMeshes.forEach((m) => m.dispose());
-      //     scene.render();
-      //   }
-      // }
+      await delay(CHECK_WAIT_TIME * 2);
     }
   }
 
@@ -328,8 +265,22 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
   const roomCamera = modelFile.cameras[camNames[1]] as FreeCamera;
   const topCamera = modelFile.cameras[camNames[3]] as FreeCamera;
   scene.activeCamera = roomCamera;
+  const oriignalCamY = roomCamera.position.y;
   scene.render();
-  await delay(2000);
+  let updatedCamYOffset = 0;
+  while (updatedCamYOffset > -7) {
+    updatedCamYOffset -= 0.05;
+    roomCamera.position.y = oriignalCamY + updatedCamYOffset;
+    scene.render();
+    await delay(1);
+  }
+  while (updatedCamYOffset < 0) {
+    updatedCamYOffset += 0.05;
+    roomCamera.position.y = oriignalCamY + updatedCamYOffset;
+    scene.render();
+    await delay(1);
+  }
+  // await delay(2000);
   scene.activeCamera = topCamera;
   scene.render();
   await delay(2000);
