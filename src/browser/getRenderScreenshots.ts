@@ -1,4 +1,4 @@
-import { DepthRenderer, Vector3 } from "@babylonjs/core";
+import { Camera, DepthRenderer, Vector3 } from "@babylonjs/core";
 
 export async function getCameraColorScreenshot(camName: string) {
   // use this whole function inside evaluate
@@ -17,11 +17,12 @@ export async function getCameraColorScreenshot(camName: string) {
   const originalMinZ = camera.minZ;
   const originalMaxZ = camera.maxZ;
 
-  engine.setSize(1920, 1080);
+  engine.setSize(1440, 1440);
 
   camera.minZ = 0.1;
   camera.maxZ = 10000;
   scene.activeCamera = camera;
+  scene.activeCamera.fovMode = Camera.FOVMODE_HORIZONTAL_FIXED;
 
   scene.render();
 
@@ -69,11 +70,12 @@ export async function getCameraDepthScreenshot(camName: string) {
     return { x: value?._x, y: value?._y, z: value?._z };
   }
 
-  engine.setSize(1920, 1080);
+  engine.setSize(1440, 1440);
 
   camera.minZ = 0.1;
   camera.maxZ = 10000;
   scene.activeCamera = camera;
+  scene.activeCamera.fovMode = Camera.FOVMODE_HORIZONTAL_FIXED;
 
   camera.minZ = depthMinZ;
   camera.maxZ = depthMaxZ;
@@ -82,13 +84,14 @@ export async function getCameraDepthScreenshot(camName: string) {
   depthRenderer = scene.enableDepthRenderer(camera, false);
 
   scene.activeCamera = camera;
+  scene.activeCamera.fovMode = Camera.FOVMODE_HORIZONTAL_FIXED;
 
   window.pageRefs.depthPostProcess = new BABYLON.PostProcess(
     "viewDepthShader",
     "viewDepth",
     [],
     ["textureSampler", "SceneDepthTexture"], // textures
-    { width: 1920, height: 1080 },
+    { width: 1440, height: 1440 },
     camera,
     // globalRefs.activeCamera
     // Texture.NEAREST_SAMPLINGMODE // sampling
@@ -105,6 +108,7 @@ export async function getCameraDepthScreenshot(camName: string) {
 
   if (depthRenderTarget) {
     depthRenderTarget.activeCamera = camera;
+    depthRenderTarget.activeCamera.fovMode = Camera.FOVMODE_HORIZONTAL_FIXED;
   }
   window.pageRefs.depthPostProcess.onApply = (effect) => {
     if (depthRenderTarget) {

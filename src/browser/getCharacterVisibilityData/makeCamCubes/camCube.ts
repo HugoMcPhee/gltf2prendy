@@ -129,7 +129,7 @@ async function makeCamCubeMesh(camName: string, islandId: string): Promise<Mesh 
   const newVertexData = convertBasicEasyVertexDataToVertexData(newCombinedBasicData);
 
   // Make a new mesh out of the new positions and indices
-  const newCamCubeMesh = new BABYLON.Mesh("newMesh", scene);
+  const newCamCubeMesh = new BABYLON.Mesh(camName + "_" + islandId + "_camCube", scene);
   newCamCubeMesh.setVerticesData(BABYLON.VertexBuffer.PositionKind, newVertexData.positions);
   newCamCubeMesh.setIndices(newVertexData.indices);
   const newMaterial = new BABYLON.StandardMaterial("newMat", scene);
@@ -163,6 +163,8 @@ async function makeCamCubeMesh(camName: string, islandId: string): Promise<Mesh 
 
   islandTriMesh.dispose();
   duplicatedMesh.dispose();
+
+  return newCamCubeMesh;
 }
 
 export const camCubeFunctions = {

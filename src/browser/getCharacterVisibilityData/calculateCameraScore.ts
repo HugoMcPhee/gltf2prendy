@@ -3,19 +3,18 @@ import { PlaceInfo } from "../..";
 import { PointCamInfo, PointsInfo } from "../browser";
 
 type CameraData = {
-  visibility: number; // 0 to 1, where 1 means fully visible
-  screenCovered: number; // 0 to 1, represents the percentage of the screen the character occupies
-  distance: number; // Raw distance from the camera to the character
-  relativeDistance: number; // 0 to 1, where 1 is closest distance
+  visibilityScore: number; // 0 to 1, where 1 means fully visible
+  screenCoverage: number; // 0 to 1, represents the percentage of the screen the character occupies
+  characterDistance: number; // Raw distance from the camera to the character
+  relativeDistanceScore: number; // 0 to 1, where 1 is closest distance
 };
 
 export function calculateCameraScore(pointCamInfo: PointCamInfo): number {
-  const data: CameraData = {
-    visibility: pointCamInfo.visibilityScore,
-    screenCovered: pointCamInfo.screenCoverage,
-    distance: pointCamInfo.characterDistance,
-    relativeDistance: pointCamInfo.relativeDistanceScore,
-  };
+  const { characterDistance, relativeDistanceScore, screenCoverage, visibilityScore } = pointCamInfo;
+  if (!characterDistance || !screenCoverage || !visibilityScore || !relativeDistanceScore) {
+    console.log("Missing data for camera score calculation");
+    return 0;
+  }
 
   // Constants for weight - these might need to be adjusted based on testing and gameplay feedback
   const visibilityWeight = 0.3;
@@ -30,23 +29,21 @@ export function calculateCameraScore(pointCamInfo: PointCamInfo): number {
 
   // console.log("distance", data.distance);
 
-  if (data.distance < optimalMinDistance) {
-    normalizedDistanceScore = data.distance / optimalMinDistance; // Decreases as distance decreases below min
-  } else if (data.distance > optimalMaxDistance) {
-    normalizedDistanceScore = optimalMaxDistance / data.distance; // Decreases as distance increases above max
+  if (characterDistance < optimalMinDistance) {
+    normalizedDistanceScore = characterDistance / optimalMinDistance; // Decreases as distance decreases below min
+  } else if (characterDistance > optimalMaxDistance) {
+    normalizedDistanceScore = optimalMaxDistance / characterDistance; // Decreases as distance increases above max
   } else {
     normalizedDistanceScore = 1; // Optimal distance
   }
 
   // Calculate total score
   const totalScore =
-    data.visibility * visibilityWeight +
-    data.screenCovered * occupancyWeight +
-    normalizedDistanceScore * distanceWeight;
+    visibilityScore * visibilityWeight + screenCoverage * occupancyWeight + normalizedDistanceScore * distanceWeight;
 
-  // return totalScore * (1 + data.relativeDistanceScore) - totalScore / 2;
+  // return totalScore * (1 + relativeDistanceScore) - totalScore / 2;
 
-  return totalScore * (0.5 + data.relativeDistance);
+  return totalScore * (0.5 + relativeDistanceScore);
 }
 
 export async function calculateRelativeDistanceScores(pointsInfo: PointsInfo, placeInfo: PlaceInfo) {
@@ -62,10 +59,12 @@ export async function calculateRelativeDistanceScores(pointsInfo: PointsInfo, pl
   for (const pointId of gridPointIds) {
     const camInfos = pointsInfo[pointId].camInfos;
     for (const camName of camNames) {
+      const { characterDistance } = camInfos[camName];
+      if (!characterDistance) continue;
       if (!cameraMinMaxDistances[camName]) {
         cameraMinMaxDistances[camName] = { min: Infinity, max: -Infinity };
       }
-      const distance = camInfos[camName].characterDistance;
+      const distance = characterDistance;
       if (distance < cameraMinMaxDistances[camName].min) {
         cameraMinMaxDistances[camName].min = distance;
       }
@@ -80,8 +79,10 @@ export async function calculateRelativeDistanceScores(pointsInfo: PointsInfo, pl
     const camInfos = pointsInfo[pointId].camInfos;
     for (const camName of camNames) {
       const info = camInfos[camName];
+      const { characterDistance } = info;
+      if (!characterDistance) continue;
       const { min, max } = cameraMinMaxDistances[camName];
-      const normalizedDistance = (info.characterDistance - min) / (max - min);
+      const normalizedDistance = (characterDistance - min) / (max - min);
       // Apply non-linear falloff, here using a quadratic decay
       info.relativeDistanceScore = 1 - normalizedDistance * normalizedDistance;
     }
@@ -114,7 +115,7 @@ export async function calculateRelativeDistanceScores(pointsInfo: PointsInfo, pl
     pointsInfo[pointId].bestCam = bestCam;
   }
 
-  // debugCamScores()
+  // debugCamScores(placeInfo);
 
   // organise the points info into a record of <CameraName, { x, y, z, pointId }[] >
   const pointIdsByBestCam: Record<string, string[]> = {};
@@ -135,6 +136,20 @@ export async function calculateRelativeDistanceScores(pointsInfo: PointsInfo, pl
   }
 
   // Save pointsInfo and pointIslandsByCamera to localStorage
-  localStorage.setItem("pointsInfo", JSON.stringify(pointsInfo));
+
+  // First remove uneeded properties so more can be saved
+  const newPointsInfo: PointsInfo = {};
+  for (const pointId of gridPointIds) {
+    const { point, camInfos, bestCam } = pointsInfo[pointId];
+    // Loop through camInfos
+    const newCamInfos: Record<string, PointCamInfo> = {};
+    for (const camName in camInfos) {
+      const { cameraScore } = camInfos[camName];
+      newCamInfos[camName] = { cameraScore };
+    }
+    newPointsInfo[pointId] = { point, camInfos: newCamInfos, bestCam };
+  }
+
+  localStorage.setItem("pointsInfo", JSON.stringify(newPointsInfo));
   localStorage.setItem("pointIslandsByCamera", JSON.stringify(pointIslandsByCamera));
 }

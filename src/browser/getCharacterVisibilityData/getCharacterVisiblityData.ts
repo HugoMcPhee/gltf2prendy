@@ -1,9 +1,9 @@
-import { FreeCamera, Mesh, Scene, Vector3 } from "@babylonjs/core";
+import { FloatArray, FreeCamera, Mesh, Nullable, Scene, Vector3 } from "@babylonjs/core";
 import { Point3D } from "chootils/dist/points3d";
 import { PlaceInfo } from "../..";
 import { GridPolyId } from "./findPointsOnFloors";
 import { findOuterEdgesFunctions } from "./makeCamCubes/findOuterEdges";
-import { VertexData } from "babylonjs";
+import { IndicesArray, VertexData } from "babylonjs";
 import { BasicEasyVertexData, Tri } from "../utils/points";
 
 export type IdPoint3D = { x: number; y: number; z: number; id: string };
@@ -12,6 +12,8 @@ export type Edge = {
   start: number; // Index of the start vertex
   end: number; // Index of the end vertex
 };
+
+// Maybe rename this to generate camcube meshes
 
 export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
   const {
@@ -52,12 +54,14 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     GRID_SPACE,
     RESOLUTION_LEVEL,
     CAMCUBE_HEIGHT,
+    GLTF2Export,
   } = window.pageRefs;
   if (!scene || !modelFile || !BABYLON || !canvas) return;
 
   const shouldRecalculateCamScores = getShouldRecalculateCamScores();
+  // const shouldRecalculateCamScores = true;
 
-  //   const TEST_POINT_INDEX = 8;
+  // const TEST_POINT_INDEX = 8;
   const TEST_POINT_INDEX = -1; // set this to check what's happening at one of the points
   const ZOOM_OUT_REVEAL_AMOUNT = 0.55;
   const CHECK_WAIT_TIME = 250;
@@ -73,7 +77,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
   await waitForSceneReady(scene);
 
   const engine = scene.getEngine();
-  engine.setSize(192 * RESOLUTION_LEVEL, 108 * RESOLUTION_LEVEL); // Assume fixed size for simplicity
+  engine.setSize(144 * RESOLUTION_LEVEL, 144 * RESOLUTION_LEVEL); // Assume fixed size for simplicity
   canvas.width = engine.getRenderWidth();
   canvas.height = engine.getRenderHeight();
   const totalPixelsAmount = engine.getRenderWidth() * engine.getRenderHeight();
@@ -84,6 +88,46 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
   const gridPointIds = Object.keys(gridPointMap);
   const camNames = placeInfo.camNames;
 
+  // function adjustInitialFov(
+  //   camera: FreeCamera,
+  //   desiredHorizontalVisibility: number,
+  //   canvasWidth: number,
+  //   canvasHeight: number
+  // ): void {
+  //   const aspectRatio = canvasWidth / canvasHeight;
+  //   camera.fov = 2 * Math.atan((desiredHorizontalVisibility / 2 / camera.position.z) * aspectRatio);
+  // }
+  if (camNames.length != 0) {
+    for (const camName of camNames) {
+      const camera = modelFile.cameras[camName] as FreeCamera;
+      if (camera) {
+        const originalWidth = 1920;
+        const originalHeight = 1080;
+        const newWidth = 1440;
+        const newHeight = 1440;
+        // Calculate the original and new aspect ratios
+        const originalAspectRatio = originalWidth / originalHeight;
+        const newAspectRatio = newWidth / newHeight;
+
+        // Calculate the ratio of the new aspect ratio to the original aspect ratio
+        const aspectRatioChange = newAspectRatio / originalAspectRatio;
+
+        // Calculate the FOV multiplier to maintain horizontal visibility
+        const fovMultiplier = 1 / aspectRatioChange;
+
+        // Apply the multiplier to the camera's FOV
+        camera.fov *= fovMultiplier;
+
+        // This works because
+        // 1. The FOV is the vertical field of view
+        // 2. when the resolution was 1920x1080, the horizontal visibility was what was wanted
+        // 3. When the resolution is 1440x1440, the horizontal visibility is still what is wanted
+        // 4. So it changes the vertical FOV to maintain the horizontal visibility, for the new resolution
+        // ( I think )
+      }
+    }
+  }
+
   if (shouldRecalculateCamScores) {
     for (const camName of camNames) {
       window.pageRefs.depthPostProcess?.dispose();
@@ -93,6 +137,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
 
       const originalMinZ = camera.minZ;
       const originalMaxZ = camera.maxZ;
+
+      camera.fovMode = BABYLON.Camera.FOVMODE_HORIZONTAL_FIXED;
 
       camera.minZ = 0.1;
       camera.maxZ = 10000;
@@ -139,6 +185,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
         if (vectorPointIndex === TEST_POINT_INDEX) {
           let updatedCamZoom = 1;
 
+          // Preview the zoom out
           // do a loop and await delay inside until originalCamZoom is ZOOM_OUT_REVEAL_AMOUNT
           while (updatedCamZoom > ZOOM_OUT_REVEAL_AMOUNT) {
             updatedCamZoom -= 0.0025;
@@ -177,7 +224,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
 
         if (vectorPointIndex === TEST_POINT_INDEX) {
           console.log("zoom in", scaledWhitePixels, "zoom out", characterFullPotentialPixels, "factor", fovScaleFactor);
-          // await delay(CHECK_WAIT_TIME);
+          await delay(CHECK_WAIT_TIME);
         }
       }
     }
@@ -199,20 +246,37 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     const camera = modelFile.cameras[camName] as FreeCamera;
     if (!camera) return;
     scene.activeCamera = camera;
+
     scene.render();
     await delay(CHECK_WAIT_TIME / 7);
 
     let visualMarkers = [];
+
     for (const islandPointIds of Object.values(pointsByIsland)) {
+      let highestCamScore = 0;
+      for (const pointId of islandPointIds) {
+        const point = gridPointMap[pointId].point;
+        if (!point) continue;
+
+        const loopedCamScore = pointsInfo[pointId].camInfos[camName].cameraScore;
+        if (loopedCamScore > highestCamScore) highestCamScore = loopedCamScore;
+      }
       for (const pointId of islandPointIds) {
         const point = gridPointMap[pointId].point;
         if (!point) continue;
         const color = randomColor;
-        visualMarkers.push(createVisualMarker(new BABYLON.Vector3(point.x, point.y, point.z), color));
+
+        const weightValiue = pointsInfo[pointId].camInfos[camName].cameraScore;
+        const weightValiueNormalized = weightValiue / highestCamScore;
+        // make a visual marker with the color, using the weight value
+        const heatmapColor = new BABYLON.Color3(1, 1 - weightValiueNormalized, 1 - weightValiueNormalized);
+        // visualMarkers.push(createVisualMarker(new BABYLON.Vector3(point.x, point.y, point.z), color));
+        visualMarkers.push(createVisualMarker(new BABYLON.Vector3(point.x, point.y, point.z), heatmapColor));
       }
 
       scene.render();
-      await delay(CHECK_WAIT_TIME / 7);
+      // await delay(CHECK_WAIT_TIME / 7);
+      await delay(CHECK_WAIT_TIME);
     }
 
     for (const visualMarker of visualMarkers) visualMarker?.dispose();
@@ -220,6 +284,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
 
   // Update to use pointIds?
   // ALSO need to make it so quad polys make two triangles
+
+  const camCubeMeshMap: Record<string, Mesh> = {};
 
   //   for each camera, for each isalnd, get the island poly data
   for (const camName of camNames) {
@@ -229,6 +295,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     const camera = modelFile.cameras[camName] as FreeCamera;
     if (!camera) return;
     scene.activeCamera = camera;
+
     scene.render();
     // await delay(CHECK_WAIT_TIME);
 
@@ -238,7 +305,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     for (const islandId of islandIds) {
       try {
         const camCubeMesh = await makeCamCubeMesh(camName, islandId);
-        if (camCubeMesh) madeMeshes.push(camCubeMesh);
+        // if (camCubeMesh) madeMeshes.push(camCubeMesh);
+        if (camCubeMesh) camCubeMeshMap[`${camName}_${islandId}`] = camCubeMesh;
       } catch (e) {
         console.error(e);
       }
@@ -265,6 +333,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
   const roomCamera = modelFile.cameras[camNames[1]] as FreeCamera;
   const topCamera = modelFile.cameras[camNames[3]] as FreeCamera;
   scene.activeCamera = roomCamera;
+
   const oriignalCamY = roomCamera.position.y;
   scene.render();
   let updatedCamYOffset = 0;
@@ -282,12 +351,15 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
   }
   // await delay(2000);
   scene.activeCamera = topCamera;
+
   scene.render();
   await delay(2000);
   scene.activeCamera = roomCamera;
+
   scene.render();
   await delay(2000);
   scene.activeCamera = topCamera;
+
   scene.render();
   await delay(2000);
 
@@ -301,4 +373,66 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
   //     await delay(CHECK_WAIT_TIME * 2);
   //   }
   // }
+
+  // Maybe ideally focus on all cameras reguardless of place
+
+  // Get the camcube meshes, and export them in a gltf file
+
+  // GLTF2Export
+
+  // const gltfFiles = await BABYLON.GLTF2Export.GLTFAsync(scene, "fileName").then((gltf) => gltf.glTFFiles);
+
+  // console.log("gltfFiles", gltfFiles);
+
+  type MeshData = {
+    positions: FloatArray;
+    indices: IndicesArray;
+    normals: FloatArray;
+  };
+
+  const meshDataMap: Record<string, Record<string, MeshData>> = {};
+
+  function getMeshData(mesh: Mesh): MeshData {
+    let vertexData = mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind) ?? [];
+    let indices = mesh.getIndices() ?? [];
+    let normals = mesh.getVerticesData(BABYLON.VertexBuffer.NormalKind) ?? [];
+
+    // Optional: Correct the indices for winding order
+    let correctedIndices = [];
+    for (let i = 0; i < indices.length; i += 3) {
+      correctedIndices.push(indices[i], indices[i + 1], indices[i + 2]);
+      // correctedIndices.push(indices[i], indices[i + 2], indices[i + 1]);
+    }
+
+    // Optional: Invert z-axis for positions
+    let correctedPositions = [];
+    for (let i = 0; i < vertexData.length; i += 3) {
+      correctedPositions.push(vertexData[i], vertexData[i + 1], -vertexData[i + 2]);
+    }
+
+    // Return this data to Puppeteer context
+    return {
+      positions: correctedPositions,
+      indices: correctedIndices,
+      normals: normals, // Only if they are correct; otherwise, generate in GLTF-transform if needed
+    };
+  }
+
+  // loop through cam names and island names
+  // for each, get the cam cube mesh
+  for (const camName of camNames) {
+    const pointsByIsland = pointIslandsByCamera[camName];
+    if (!pointsByIsland) continue;
+    const islandIds = Object.keys(pointsByIsland);
+
+    for (const islandId of islandIds) {
+      const foundMesh = camCubeMeshMap[`${camName}_${islandId}`];
+      if (!foundMesh) continue;
+      const meshData = getMeshData(foundMesh);
+      meshDataMap[camName] = meshDataMap[camName] || {};
+      meshDataMap[camName][islandId] = meshData;
+    }
+  }
+
+  return meshDataMap;
 }

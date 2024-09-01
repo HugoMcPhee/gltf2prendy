@@ -9,8 +9,8 @@ export function setUpBabylonScene() {
   // ----------------------------------
   const canvas = document.createElement("canvas");
   canvas.id = "renderCanvas";
-  canvas.width = 1920;
-  canvas.height = 1080;
+  canvas.width = 1440;
+  canvas.height = 1440;
   document.body.appendChild(canvas);
 
   const engine = new BABYLON.Engine(canvas, true, {
@@ -33,7 +33,7 @@ export function setUpBabylonScene() {
   mainLight.intensity = 0.7;
   camera.setTarget(BABYLON.Vector3.Zero());
   camera.attachControl(canvas, true);
-  engine.setSize(1920, 1080);
+  engine.setSize(1440, 1440);
 
   pageRefs.freeCamera = camera;
   // This attaches the camera to the canvas

@@ -74,6 +74,7 @@ import { setUpBabylonScene } from "./setUpBabylonScene";
 import { shaders } from "./shaders";
 import { pointsFunctions } from "./utils/points";
 import { waitForSceneReady } from "./waitForSceneReady";
+import { GLTF2Export } from "@babylonjs/serializers/glTF";
 
 // Expose everything on window.pageRefs
 
@@ -108,6 +109,7 @@ export const BABYLON = {
   QuadraticErrorSimplification,
   MeshDebugPluginMaterial,
   MeshDebugMode,
+  GLTF2Export,
 };
 const pageRefsFunctions = {
   handleGltfModel,
@@ -153,7 +155,7 @@ export const initialPageRefs = {
   pointIslandsByCamera: {},
   gridPolyMap: {},
   islandPolyIdsByCamera: {},
-  GRID_SPACE: 2,
+  GRID_SPACE: 1,
   RESOLUTION_LEVEL: 5,
   CAMCUBE_HEIGHT: 3,
   //
@@ -164,10 +166,10 @@ export const initialPageRefs = {
 export type PageRefsFunctions = typeof pageRefsFunctions;
 
 export type PointCamInfo = {
-  screenCoverage: number;
-  visibilityScore: number;
-  characterDistance: number;
-  relativeDistanceScore: number; // 0 to 1, where 1 is closest distance
+  screenCoverage?: number;
+  visibilityScore?: number;
+  characterDistance?: number;
+  relativeDistanceScore?: number; // 0 to 1, where 1 is closest distance
   cameraScore: number; // cameraScore is made of the other scores mostly, but potentially also other influences
 };
 

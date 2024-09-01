@@ -1,6 +1,7 @@
-import { FreeCamera } from "@babylonjs/core";
+import { Camera, FreeCamera } from "@babylonjs/core";
 import { PlaceInfo } from "../..";
 
+// TODO fix this
 export async function debugCamScores(placeInfo: PlaceInfo) {
   const { modelFile, delay, scene, canvas, BABYLON, pointsInfo, gridPointMap } = window.pageRefs;
   if (!scene || !modelFile || !BABYLON || !canvas) return;
@@ -27,6 +28,7 @@ export async function debugCamScores(placeInfo: PlaceInfo) {
     camera.maxZ = 10000;
 
     scene.activeCamera = camera;
+    scene.activeCamera.fovMode = Camera.FOVMODE_HORIZONTAL_FIXED;
     modelFile.transformNodes.details.setEnabled(true);
 
     for (const pointId of gridPointIds) {

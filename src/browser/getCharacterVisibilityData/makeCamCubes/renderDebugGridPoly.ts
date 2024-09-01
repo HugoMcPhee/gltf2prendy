@@ -1,4 +1,5 @@
 import { Color3, Mesh } from "@babylonjs/core";
+import { Point3D } from "chootils/dist/points3d";
 
 export async function renderDebugGridPoly(polyId: string, color: Color3) {
   const { gridPolyMap, gridPointMap, createVisualMarker, BABYLON } = window.pageRefs;
