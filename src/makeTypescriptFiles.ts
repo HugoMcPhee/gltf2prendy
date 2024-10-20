@@ -1,5 +1,5 @@
-import { PlaceInfo } from ".";
-import * as fs from "fs";
+import fs from "fs/promises";
+import { PlaceInfo } from "./fileInfoHelpers";
 
 type SegmentInfo = {
   name: string;
@@ -30,15 +30,7 @@ const oneFrameTime = 1 / chosenFramerate;
 // `${parent_folder_path}${os.sep}${this_place_name}.ts`,
 
 export function makePlaceTypescriptFile(placeInfo: PlaceInfo) {
-  const {
-    camNames,
-    floorNames,
-    placeName,
-    soundspotNames,
-    spotNames,
-    triggerNames,
-    wallNames,
-  } = placeInfo;
+  const { camNames, floorNames, placeName, soundspotNames, spotNames, triggerNames, wallNames } = placeInfo;
 
   // Save index file
   let content = "";
@@ -181,8 +173,7 @@ export function makePlacesTypescriptFile(placeNames: string[]) {
 
   content += "\n";
   content += "export type PlaceName = keyof typeof placeInfoByName;\n\n";
-  content +=
-    "export const placeNames = Object.keys(placeInfoByName) as PlaceName[];\n\n";
+  content += "export const placeNames = Object.keys(placeInfoByName) as PlaceName[];\n\n";
   content += "type PlaceInfoByName = typeof placeInfoByName;\n\n";
   content +=
     "export type CameraNameByPlace = {\n" +
@@ -200,8 +191,7 @@ export function makePlacesTypescriptFile(placeNames: string[]) {
     "export type SoundspotNameByPlace = {\n" +
     '  [P_PlaceName in PlaceName]: PlaceInfoByName[P_PlaceName]["soundspotNames"][number];\n' +
     "};\n";
-  content +=
-    "export type AnySoundspotName = SoundspotNameByPlace[PlaceName];\n\n";
+  content += "export type AnySoundspotName = SoundspotNameByPlace[PlaceName];\n\n";
   content +=
     "export type SegmentNameByPlace = {\n" +
     '  [P_PlaceName in PlaceName]: PlaceInfoByName[P_PlaceName]["segmentNames"][number];\n' +
@@ -234,4 +224,21 @@ export function makePlacesTypescriptFile(placeNames: string[]) {
   content += "];\n";
 
   return content;
+}
+
+export async function makePlacesTypescriptFiles({
+  placeInfo,
+  placeNames,
+}: {
+  placeInfo: PlaceInfo;
+  placeNames: string[];
+}) {
+  const placeTsFile = makePlaceTypescriptFile(placeInfo);
+  await fs.writeFile(placeInfo.placeName + ".ts", placeTsFile);
+  console.log("finsihed writing place txt file");
+
+  // go to parent folder and write the places file
+  const placesTsFile = makePlacesTypescriptFile(placeNames);
+  await fs.writeFile("../places.ts", placesTsFile);
+  console.log("finsihed writing places txt file");
 }

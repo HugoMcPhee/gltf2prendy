@@ -1,10 +1,6 @@
-import { FloatArray, FreeCamera, Mesh, Nullable, Scene, Vector3 } from "@babylonjs/core";
-import { Point3D } from "chootils/dist/points3d";
-import { PlaceInfo } from "../..";
-import { GridPolyId } from "./findPointsOnFloors";
-import { findOuterEdgesFunctions } from "./makeCamCubes/findOuterEdges";
-import { IndicesArray, VertexData } from "babylonjs";
-import { BasicEasyVertexData, Tri } from "../utils/points";
+import { FloatArray, FreeCamera, Mesh } from "@babylonjs/core";
+import { IndicesArray } from "babylonjs";
+import { PlaceInfo } from "../../fileInfoHelpers";
 
 export type IdPoint3D = { x: number; y: number; z: number; id: string };
 
@@ -12,6 +8,14 @@ export type Edge = {
   start: number; // Index of the start vertex
   end: number; // Index of the end vertex
 };
+
+type MeshData = {
+  positions: FloatArray;
+  indices: IndicesArray;
+  normals: FloatArray;
+};
+
+export type VisibilityData = Record<string, Record<string, MeshData>>;
 
 // Maybe rename this to generate camcube meshes
 
@@ -54,9 +58,14 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     GRID_SPACE,
     RESOLUTION_LEVEL,
     CAMCUBE_HEIGHT,
-    GLTF2Export,
+    VIEW_WIDTH,
+    VIEW_HEIGHT,
   } = window.pageRefs;
   if (!scene || !modelFile || !BABYLON || !canvas) return;
+
+  console.log("getCharacterVisibilityData");
+
+  await delay(1000);
 
   const shouldRecalculateCamScores = getShouldRecalculateCamScores();
   // const shouldRecalculateCamScores = true;
@@ -76,6 +85,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
 
   await waitForSceneReady(scene);
 
+  console.log("got to before engine");
+
   const engine = scene.getEngine();
   engine.setSize(144 * RESOLUTION_LEVEL, 144 * RESOLUTION_LEVEL); // Assume fixed size for simplicity
   canvas.width = engine.getRenderWidth();
@@ -83,9 +94,15 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
   const totalPixelsAmount = engine.getRenderWidth() * engine.getRenderHeight();
 
   await setupFakeCharacter();
+  console.log("got to after setupFakeCharacter");
   await applyBlackMaterialToDetails();
+  console.log("got to after applyBlackMaterialToDetails");
+  await delay(1000);
   await generateFloorPoints(GRID_SPACE);
+  console.log("got to after generateFloorPoints");
+  await delay(1000);
   const gridPointIds = Object.keys(gridPointMap);
+  console.log("got to after gridPointIds");
   const camNames = placeInfo.camNames;
 
   // function adjustInitialFov(
@@ -103,8 +120,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
       if (camera) {
         const originalWidth = 1920;
         const originalHeight = 1080;
-        const newWidth = 1440;
-        const newHeight = 1440;
+        const newWidth = VIEW_WIDTH;
+        const newHeight = VIEW_HEIGHT;
         // Calculate the original and new aspect ratios
         const originalAspectRatio = originalWidth / originalHeight;
         const newAspectRatio = newWidth / newHeight;
@@ -127,6 +144,9 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
       }
     }
   }
+
+  console.log("got to after camNames");
+  await delay(3000);
 
   if (shouldRecalculateCamScores) {
     for (const camName of camNames) {
@@ -173,7 +193,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
           camera.fov = initialFov / value;
         }
 
-        modelFile.transformNodes.details.setEnabled(true);
+        modelFile.transformNodes.Details.setEnabled(true);
 
         // First render
         camera.fov = initialFov;
@@ -194,11 +214,11 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
             await delay(1);
           }
         }
-        modelFile.transformNodes.details.setEnabled(false);
+        modelFile.transformNodes.Details.setEnabled(false);
 
         // Second render
         updateCameraZoom(ZOOM_OUT_REVEAL_AMOUNT);
-        modelFile.transformNodes.details.setEnabled(false);
+        modelFile.transformNodes.Details.setEnabled(false);
         scene.render();
         const characterFullPotentialPixels = await countWhitePixels(scene);
         const fovScaleFactor = getFovScaleFactor(initialFov, camera.fov);
@@ -206,7 +226,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
         if (TEST_POINT_INDEX > 0) await delay(1);
 
         // Reset state
-        modelFile.transformNodes.details.setEnabled(true);
+        modelFile.transformNodes.Details.setEnabled(true);
         updateCameraZoom(1);
         camera.fov = initialFov;
         camera.minZ = originalMinZ;
@@ -235,6 +255,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     localStorage.setItem("GRID_SPACE", GRID_SPACE.toString());
     localStorage.setItem("RESOLUTION_LEVEL", RESOLUTION_LEVEL.toString());
   }
+  console.log("got to after shouldRecalculateCamScores");
 
   //   For each camera, render the islands with a different color
   for (const camName of camNames) {
@@ -282,6 +303,8 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
     for (const visualMarker of visualMarkers) visualMarker?.dispose();
   }
 
+  console.log("got to after render cam islands");
+
   // Update to use pointIds?
   // ALSO need to make it so quad polys make two triangles
 
@@ -318,6 +341,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
       await delay(CHECK_WAIT_TIME * 2);
     }
   }
+  console.log("got to after render cam islands poly data");
 
   // console.log("set free camera");
   // if (freeCamera) {
@@ -325,43 +349,51 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
   // }
 
   // hide the scene meshes
-  modelFile.transformNodes.details.setEnabled(false);
+  modelFile.transformNodes.Details.setEnabled(false);
 
   console.log("camNames", camNames);
+
+  console.log("got to before set camera");
+  await delay(3000);
 
   // Focus on the 3rd camera
   const roomCamera = modelFile.cameras[camNames[1]] as FreeCamera;
   const topCamera = modelFile.cameras[camNames[3]] as FreeCamera;
   scene.activeCamera = roomCamera;
 
-  const oriignalCamY = roomCamera.position.y;
+  console.log("got to before read camera position");
+  await delay(3000);
+
+  const originalCamY = roomCamera.position.y;
+  console.log("got to after read camera position");
+  await delay(3000);
   scene.render();
   let updatedCamYOffset = 0;
   while (updatedCamYOffset > -7) {
     updatedCamYOffset -= 0.05;
-    roomCamera.position.y = oriignalCamY + updatedCamYOffset;
+    roomCamera.position.y = originalCamY + updatedCamYOffset;
     scene.render();
     await delay(1);
   }
   while (updatedCamYOffset < 0) {
     updatedCamYOffset += 0.05;
-    roomCamera.position.y = oriignalCamY + updatedCamYOffset;
+    roomCamera.position.y = originalCamY + updatedCamYOffset;
     scene.render();
     await delay(1);
   }
-  // await delay(2000);
+  // await delay(1000);
   scene.activeCamera = topCamera;
 
   scene.render();
-  await delay(2000);
+  await delay(1000);
   scene.activeCamera = roomCamera;
 
   scene.render();
-  await delay(2000);
+  await delay(1000);
   scene.activeCamera = topCamera;
 
   scene.render();
-  await delay(2000);
+  await delay(1000);
 
   // loop 3 times
   // for (let i = 0; i < 3; i++) {
@@ -384,13 +416,7 @@ export async function getCharacterVisibilityData(placeInfo: PlaceInfo) {
 
   // console.log("gltfFiles", gltfFiles);
 
-  type MeshData = {
-    positions: FloatArray;
-    indices: IndicesArray;
-    normals: FloatArray;
-  };
-
-  const meshDataMap: Record<string, Record<string, MeshData>> = {};
+  const meshDataMap: VisibilityData = {};
 
   function getMeshData(mesh: Mesh): MeshData {
     let vertexData = mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind) ?? [];

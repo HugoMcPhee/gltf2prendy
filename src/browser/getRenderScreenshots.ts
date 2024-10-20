@@ -1,14 +1,16 @@
 import { Camera, DepthRenderer, Vector3 } from "@babylonjs/core";
 
+// TODO Update to support blenders exported gtlf nesting
+// "Scene Collection" > "Exportable" / "Details" etc
 export async function getCameraColorScreenshot(camName: string) {
   // use this whole function inside evaluate
 
   // remove the old depth postProcess
   window.pageRefs.depthPostProcess?.dispose();
 
-  const { modelFile, delay, engine, scene, countWhitePixels } = window.pageRefs;
+  const { modelFile, delay, engine, scene, countWhitePixels, VIEW_WIDTH, VIEW_HEIGHT } = window.pageRefs;
   if (!delay || !modelFile || !engine || !scene) return;
-  const detailsNode = modelFile.transformNodes.details;
+  const detailsNode = modelFile.transformNodes.Details;
   detailsNode.setEnabled(true);
 
   const camera = modelFile.cameras[camName];
@@ -17,7 +19,7 @@ export async function getCameraColorScreenshot(camName: string) {
   const originalMinZ = camera.minZ;
   const originalMaxZ = camera.maxZ;
 
-  engine.setSize(1440, 1440);
+  engine.setSize(VIEW_WIDTH, VIEW_HEIGHT);
 
   camera.minZ = 0.1;
   camera.maxZ = 10000;
@@ -37,7 +39,7 @@ export async function getCameraColorScreenshot(camName: string) {
 export async function getCameraDepthScreenshot(camName: string) {
   // use this whole function inside evaluate
 
-  const { modelFile, delay, engine, scene, BABYLON } = window.pageRefs;
+  const { modelFile, delay, engine, scene, BABYLON, VIEW_WIDTH, VIEW_HEIGHT } = window.pageRefs;
   if (!delay || !modelFile || !engine || !scene || !BABYLON) return;
   const camera = modelFile.cameras[camName];
   const cameraNode = modelFile.transformNodes[camName + "_node"];
@@ -70,7 +72,7 @@ export async function getCameraDepthScreenshot(camName: string) {
     return { x: value?._x, y: value?._y, z: value?._z };
   }
 
-  engine.setSize(1440, 1440);
+  engine.setSize(VIEW_WIDTH, VIEW_HEIGHT);
 
   camera.minZ = 0.1;
   camera.maxZ = 10000;
@@ -91,7 +93,7 @@ export async function getCameraDepthScreenshot(camName: string) {
     "viewDepth",
     [],
     ["textureSampler", "SceneDepthTexture"], // textures
-    { width: 1440, height: 1440 },
+    { width: VIEW_WIDTH, height: VIEW_HEIGHT },
     camera,
     // globalRefs.activeCamera
     // Texture.NEAREST_SAMPLINGMODE // sampling

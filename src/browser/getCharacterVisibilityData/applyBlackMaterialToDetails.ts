@@ -2,7 +2,7 @@ export async function applyBlackMaterialToDetails() {
   const { modelFile } = window.pageRefs;
   if (!modelFile) return;
 
-  const transformNode = modelFile.transformNodes.details;
+  const transformNode = modelFile.transformNodes.Details;
 
   const { BABYLON, scene } = window.pageRefs;
 

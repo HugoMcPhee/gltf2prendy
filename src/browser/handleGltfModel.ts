@@ -1,9 +1,7 @@
 import { Scene } from "@babylonjs/core";
-import { GltfFilesData, PlaceInfo } from "..";
+import { GltfFilesData, PlaceInfo } from "../fileInfoHelpers";
 import { loadModelFile } from "./loadModelFile/loadModelFile";
 import { setUpPlaceForRendering } from "./setUpPlaceForRendering";
-import { applyBlackMaterialToDetails } from "./getCharacterVisibilityData/applyBlackMaterialToDetails";
-import { generateFloorPoints } from "./getCharacterVisibilityData/findPointsOnFloors";
 
 export async function handleGltfModel({
   gltfFilesData,
@@ -23,5 +21,6 @@ export async function handleGltfModel({
     window.pageRefs.modelFile = modelFile;
 
     await setUpPlaceForRendering({ modelFile, placeInfo });
+    console.log("handleGltfModel done");
   }
 }

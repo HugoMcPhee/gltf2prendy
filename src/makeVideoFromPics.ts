@@ -10,13 +10,19 @@ const videoQuality = 25;
 const keyframes = 1;
 const video_output_path = "";
 
-export async function makeVideoFromPics(
-  isDepthVid: boolean,
-  placeInfo: PlaceInfo,
-  ffmpeg: FFmpeg,
-  folderPath: string,
-  placeName: string
-) {
+export async function makeVideoFromPics({
+  isDepthVid,
+  placeInfo,
+  ffmpeg,
+  folderPath,
+  placeName,
+}: {
+  isDepthVid: boolean;
+  placeInfo: PlaceInfo;
+  ffmpeg: FFmpeg;
+  folderPath: string;
+  placeName: string;
+}) {
   const frameDuration = 1 + 1; // seconds + 1 frame padding (blender duplicates the last frame after rendering to add padding)
 
   // const makeVideoCommand = `C:\\ffmpeg -framerate ${chosen_framerate} -f image2 -i "${frame_image_path}%04d.png" -vcodec libx264 -crf ${video_quality} -g ${keyframes} -vf "fps=${chosen_framerate},format=yuv420p,scale=1280:720" -y -movflags faststart "${video_output_path}.mp4" -hide_banner -loglevel error`;

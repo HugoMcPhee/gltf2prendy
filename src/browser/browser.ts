@@ -75,6 +75,7 @@ import { shaders } from "./shaders";
 import { pointsFunctions } from "./utils/points";
 import { waitForSceneReady } from "./waitForSceneReady";
 import { GLTF2Export } from "@babylonjs/serializers/glTF";
+import { CAN } from "..";
 
 // Expose everything on window.pageRefs
 
@@ -155,9 +156,11 @@ export const initialPageRefs = {
   pointIslandsByCamera: {},
   gridPolyMap: {},
   islandPolyIdsByCamera: {},
-  GRID_SPACE: 1,
+  GRID_SPACE: 3,
   RESOLUTION_LEVEL: 5,
   CAMCUBE_HEIGHT: 3,
+  VIEW_WIDTH: 1440,
+  VIEW_HEIGHT: 1440,
   //
   ...pageRefsFunctions,
   ...pointsFunctions,
@@ -207,6 +210,8 @@ export type PageRefsExtras = {
   GRID_SPACE: number; // space between grid points, in meters, more space means less points to check
   RESOLUTION_LEVEL: number; // higher resolution means more pixels to check, so more accurate but slower
   CAMCUBE_HEIGHT: number;
+  VIEW_WIDTH: number;
+  VIEW_HEIGHT: number;
 
   pointsInfo: PointsInfo;
   gridPointMap: GridPointMap;

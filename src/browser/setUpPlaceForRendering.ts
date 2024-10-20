@@ -1,8 +1,9 @@
 import { ShaderStore } from "@babylonjs/core";
-import { PlaceInfo } from "..";
 import { loadModelFile } from "./loadModelFile/loadModelFile";
 import { setupFakeCharacter } from "./getCharacterVisibilityData/setupFakeCharacter";
 import { shaders } from "./shaders";
+import delay from "delay";
+import { PlaceInfo } from "../fileInfoHelpers";
 
 export async function setUpPlaceForRendering({
   modelFile,
@@ -17,6 +18,16 @@ export async function setUpPlaceForRendering({
 }) {
   if (!modelFile) return;
 
+  const delay = async (time: number) => new Promise((resolve) => setTimeout(resolve, time));
+
+  console.log("========================");
+  console.log("setUpPlaceForRendering");
+  console.log("========================");
+  console.log("========================");
+  console.log("========================");
+  // console.log(JSON.stringify(modelFile.transformNodes, null, 2));
+  console.log(Object.keys(modelFile.transformNodes));
+
   modelFile.transformNodes.walls?.setEnabled(false);
   modelFile.transformNodes.triggers?.setEnabled(false);
   modelFile.transformNodes.floors?.setEnabled(false);
@@ -30,4 +41,6 @@ export async function setUpPlaceForRendering({
 
   ShaderStore.ShadersStore["viewDepthPixelShader"] = shaders.viewDepth.fragment;
   ShaderStore.ShadersStore["viewDepthVertexShader"] = shaders.viewDepth.vertex;
+
+  console.log("setUpPlaceForRendering done");
 }

@@ -49,8 +49,16 @@ export type GridPolyIdsByCamIslands = Record<CamName, Record<IslandIndex, GridPo
 
 // Function to create the grid of points and cast rays
 export async function generateFloorPoints(gridDistance: number = 1) {
-  const { BABYLON, scene, modelFile, gridPointMap, gridPointsOrganized, getDidGridSettingsChange, getSimplifiedPoint } =
-    window.pageRefs;
+  const {
+    BABYLON,
+    scene,
+    modelFile,
+    gridPointMap,
+    gridPointsOrganized,
+    getDidGridSettingsChange,
+    getSimplifiedPoint,
+    delay,
+  } = window.pageRefs;
 
   // Check if gridPointMap and gridPointsOrganized already exist in localStorage, and load those instead
   const gridPointMapFromStorage = localStorage.getItem("gridPointMap");
@@ -65,6 +73,7 @@ export async function generateFloorPoints(gridDistance: number = 1) {
   }
 
   const foundPoints: Vector3[] = [];
+
   const transformNode = modelFile?.transformNodes.floors;
 
   if (!transformNode || !scene || !BABYLON) return { gridPointMap, gridPointsOrganized };

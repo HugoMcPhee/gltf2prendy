@@ -29,7 +29,7 @@ export async function debugCamScores(placeInfo: PlaceInfo) {
 
     scene.activeCamera = camera;
     scene.activeCamera.fovMode = Camera.FOVMODE_HORIZONTAL_FIXED;
-    modelFile.transformNodes.details.setEnabled(true);
+    modelFile.transformNodes.Details.setEnabled(true);
 
     for (const pointId of gridPointIds) {
       const gridPoint = gridPointMap[pointId];
@@ -48,10 +48,10 @@ export async function debugCamScores(placeInfo: PlaceInfo) {
       //   createVisualMarker(vectorPoint, color);
     }
     await delay(1);
-    modelFile.transformNodes.details.setEnabled(false);
+    modelFile.transformNodes.Details.setEnabled(false);
     scene.render();
     camera.minZ = originalMinZ;
     camera.maxZ = originalMaxZ;
-    modelFile.transformNodes.details.setEnabled(true);
+    modelFile.transformNodes.Details.setEnabled(true);
   }
 }

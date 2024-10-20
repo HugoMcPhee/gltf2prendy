@@ -1,7 +1,7 @@
 export function setUpBabylonScene() {
   const pageRefs = window.pageRefs;
 
-  const { delay, BABYLON, handleGltfModel, waitForSceneReady } = window.pageRefs;
+  const { delay, BABYLON, handleGltfModel, waitForSceneReady, VIEW_WIDTH, VIEW_HEIGHT } = window.pageRefs;
   if (!delay) return;
 
   // ----------------------------------
@@ -9,8 +9,8 @@ export function setUpBabylonScene() {
   // ----------------------------------
   const canvas = document.createElement("canvas");
   canvas.id = "renderCanvas";
-  canvas.width = 1440;
-  canvas.height = 1440;
+  canvas.width = VIEW_WIDTH;
+  canvas.height = VIEW_HEIGHT;
   document.body.appendChild(canvas);
 
   const engine = new BABYLON.Engine(canvas, true, {
@@ -33,7 +33,7 @@ export function setUpBabylonScene() {
   mainLight.intensity = 0.7;
   camera.setTarget(BABYLON.Vector3.Zero());
   camera.attachControl(canvas, true);
-  engine.setSize(1440, 1440);
+  engine.setSize(VIEW_WIDTH, VIEW_HEIGHT);
 
   pageRefs.freeCamera = camera;
   // This attaches the camera to the canvas
